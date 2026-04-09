@@ -17,6 +17,7 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // 회원가입
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse authResponse = authService.register(request);
@@ -24,5 +25,12 @@ public class AuthController {
         // 201 응답 및 통일된 ApiResponse 포맷 적용
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(authResponse));
+    }
+
+    // 로그인
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse authResponse = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.ok(authResponse));
     }
 }
