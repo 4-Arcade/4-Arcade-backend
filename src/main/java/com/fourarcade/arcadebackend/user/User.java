@@ -36,6 +36,9 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
     @Builder
     public User(String email, String passwordHash, String nickname) {
         this.email = email;
