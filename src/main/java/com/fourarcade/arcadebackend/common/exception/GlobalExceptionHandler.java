@@ -17,6 +17,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.fail(error));
     }
 
+    // 인증 예외 (401)
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthException(AuthException ex) {
+        // 예외에 담아둔 코드와 메세지를 그대로 ApiError 로 변환
+        ApiError error = ApiError.of(ex.getCode(), ex.getMessage(), ex.getStatus().value());
+        return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
+    }
+
     // 그 외 예외
     @ExceptionHandler(Exception.class)
     public  ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
