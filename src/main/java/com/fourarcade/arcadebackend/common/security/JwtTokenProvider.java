@@ -8,6 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -15,6 +18,8 @@ import java.util.*;
 @Component
 @RequiredArgsConstructor
 public class JwtTokenProvider {
+
+    public record RefreshTokenPair(String tokenForClient, byte[] tokenHash) {}
 
     // application.properties 의 jwt 설정 담아둔 프로퍼티 클래스
     private final JwtTokenProperties props;
@@ -43,7 +48,7 @@ public class JwtTokenProvider {
         }
 
         return Jwts.builder()
-                .header().type("JWT").and()                   // 헤더: 이 토큰은 JWT 타입이다
+                .header().type("JWT").and()                // 헤더: 이 토큰은 JWT 타입이다
                 .issuer(props.getIssuer())                    // 발급자 (예: arcade-backend)
                 .audience().add(props.getAudience()).and()    // 대상자 (예: arcade-frontend)
                 .subject(userId.toString())                   // 토큰 제목: 유저 식별자(UUID)
@@ -52,8 +57,30 @@ public class JwtTokenProvider {
                 .notBefore(Date.from(now))                    // 이 시간 이전에는 사용 불가 (보통 발급시간과 동일)
                 .expiration(Date.from(exp))                   // 만료 시간
                 .claims(claims)                               // 위에서 만든 커스텀 데이터 쏙!
-                .signWith(signingKey)                       // 비밀키로 단단하게 서명 (위조 방지)
+                .signWith(signingKey)                         // 비밀키로 단단하게 서명 (위조 방지)
                 .compact();                                   // 압축해서 문자열로
+    }
+
+    // RefreshToken 생성
+    public RefreshTokenPair createRefreshToken() {
+        byte[] raw = new byte[32];
+        new SecureRandom().nextBytes(raw);
+        String tokenForClient = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        byte[] hash = sha256(raw);
+        return new RefreshTokenPair(tokenForClient, hash);
+    }
+
+    public byte[] hashRefreshToken(String tokenForClient) {
+        byte[] decoded = Base64.getUrlDecoder().decode(tokenForClient); // 디코딩 후 해시
+        return sha256(decoded);
+    }
+
+    public byte[] sha256(byte[] input) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(input);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     // Access Token 검증 및 파싱
