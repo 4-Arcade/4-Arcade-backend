@@ -36,7 +36,7 @@ public class SecurityConfig {
 
                 // 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/register", "/auth/login").permitAll()
+                        .requestMatchers("/auth/register", "/auth/login", "/auth/refresh").permitAll()
 
                         // 그 외의 요청은 토큰 필요
                         .anyRequest().authenticated()

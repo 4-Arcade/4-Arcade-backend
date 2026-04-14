@@ -10,20 +10,26 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
     private final UserRepository userRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
+    private static final long REFRESH_TTL_DAYS = 30;
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+
         // 이메일 중복 체크
-        if(userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email address already in use");
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new AuthException("EMAIL_DUPLICATED", "이미 가입된 이메일입니다.", HttpStatus.CONFLICT);
         }
 
         // 비밀번호 암호화
@@ -38,19 +44,10 @@ public class AuthService {
 
         userRepository.save(newUser);
 
-        // JWT 토큰 발급
-        // Access Token 발급
-        String accessToken = jwtTokenProvider.createAccessToken(
-                newUser.getId(),
-                newUser.getEmail(),
-                List.of()
-        );
-
-        // 응답 객체 반환
-        return AuthResponse.of(accessToken, newUser);
+        return issueTokensAndRespond(newUser);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         // 유저 조회
         User user = userRepository.findByEmail(request.getEmail())
@@ -66,14 +63,56 @@ public class AuthService {
             throw new AuthException("ACCOUNT_DELETED", "탈퇴한 계정입니다.", HttpStatus.FORBIDDEN);
         }
 
-        // AccessToken 발급
+        return issueTokensAndRespond(user);
+    }
+
+    private AuthResponse issueTokensAndRespond(User user) {
+
+        // Access Token 발급
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(),
                 user.getEmail(),
                 List.of()
         );
 
-        // 응답 객체 반환
-        return AuthResponse.of(accessToken, user);
+        // RefreshToken 발급 (원문 + 해시)
+        JwtTokenProvider.RefreshTokenPair refreshPair = jwtTokenProvider.createRefreshToken();
+        String refreshForClient = refreshPair.tokenForClient();
+        byte[] refreshHash = refreshPair.tokenHash();
+
+        // db에는 해시만 저장
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .tokenHash(refreshHash)
+                .expiresAt(LocalDateTime.now().plusDays(REFRESH_TTL_DAYS))
+                .build());
+
+        return AuthResponse.of(accessToken, refreshForClient, user);
+    }
+
+    @Transactional
+    public AuthResponse refresh(String refreshTokenForClient) {
+
+        // 클라이언트 토큰 -> 해시
+        byte[] hash = jwtTokenProvider.hashRefreshToken(refreshTokenForClient);
+
+        // DB 에서 해시 조회
+        RefreshToken tokenEntity = refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)
+                .orElseThrow(() -> new AuthException("INVALID_REFRESH_TOKEN", "유효하지 않은 토큰입니다.", HttpStatus.UNAUTHORIZED));
+
+        // 만료 확인
+        if (tokenEntity.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new AuthException("EXPIRED_REFRESH_TOKEN", "만료된 토큰입니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        // 유저 조회
+        User user = userRepository.findById(tokenEntity.getUserId())
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", "유저를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        // 사용이 끝난 기존 리프레시 토큰은 DB에서 즉시 삭제 (또는 폐기 처리)
+        refreshTokenRepository.delete(tokenEntity);
+
+        //  공통 메서드를 호출하여 "새 Access + 새 Refresh" 발급!
+        return issueTokensAndRespond(user);
     }
 }

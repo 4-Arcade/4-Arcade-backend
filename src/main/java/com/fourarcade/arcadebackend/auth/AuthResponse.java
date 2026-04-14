@@ -10,13 +10,21 @@ import java.util.UUID;
 @Builder
 public class AuthResponse {
     private String accessToken;
-    //private String refreshToken;
+    private String refreshToken;
     private UserDto user;
 
-    public static AuthResponse of(String accessToken, User user) {
+    public static AuthResponse of(String accessToken, String refreshToken, User user) {
         return AuthResponse.builder()
                 .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .user(new UserDto(user.getId(), user.getNickname(), user.getProfileImg()))
+                .build();
+    }
+
+    public static AuthResponse withoutRefreshToken(AuthResponse original) {
+        return AuthResponse.builder()
+                .accessToken(original.getAccessToken())
+                .user(original.getUser())
                 .build();
     }
 
