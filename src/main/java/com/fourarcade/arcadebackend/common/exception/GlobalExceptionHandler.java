@@ -31,4 +31,9 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.of("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.", 500);
         return ResponseEntity.internalServerError().body(ApiResponse.fail(error));
     }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        ApiError error = ApiError.of("VALIDATION_FAILED", ex.getMessage(), 400);
+        return ResponseEntity.badRequest().body(ApiResponse.fail(error));
+    }
 }
