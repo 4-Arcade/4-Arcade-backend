@@ -33,4 +33,12 @@ public class QuizService {
         Quiz savedQuiz = quizRepository.saveAndFlush(quiz);
         return QuizCreateResponse.from(savedQuiz);
     }
+
+    // RoomService 에서 퀴즈 정보 가져갈 때 사용
+    @Transactional(readOnly = true)
+    public Quiz getQuizById(UUID quizId) {
+        return quizRepository.findById(quizId)
+                .orElseThrow(() -> new AuthException("QUIZ_NOT_FOUND", "존재하지 않는 퀴즈입니다.", HttpStatus.NOT_FOUND));
+    }
+
 }

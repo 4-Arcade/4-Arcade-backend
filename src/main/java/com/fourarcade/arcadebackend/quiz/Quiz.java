@@ -38,6 +38,11 @@ public class Quiz {
     @Column(name = "play_count", nullable = false)
     private int playCount;
 
+
+    // 퀴즈 수
+    @Column(name = "question_count", nullable = false)
+    private int questionCount; // 퀴즈에 포함된 총 문제 수
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
