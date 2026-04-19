@@ -25,15 +25,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
     }
 
+    // Room 생성 예외
+    @ExceptionHandler(RoomException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRoomException(RoomException ex) {
+        ApiError error = ApiError.of(ex.getCode(), ex.getMessage(), ex.getStatus().value());
+        return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        ApiError error = ApiError.of("VALIDATION_FAILED", ex.getMessage(), 400);
+        return ResponseEntity.badRequest().body(ApiResponse.fail(error));
+    }
+
     // 그 외 예외
     @ExceptionHandler(Exception.class)
     public  ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
         ApiError error = ApiError.of("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.", 500);
         return ResponseEntity.internalServerError().body(ApiResponse.fail(error));
-    }
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        ApiError error = ApiError.of("VALIDATION_FAILED", ex.getMessage(), 400);
-        return ResponseEntity.badRequest().body(ApiResponse.fail(error));
     }
 }
