@@ -1,5 +1,7 @@
-package com.fourarcade.arcadebackend.room;
+package com.fourarcade.arcadebackend.room.dto;
 
+import com.fourarcade.arcadebackend.room.RoomRedisEntity;
+import com.fourarcade.arcadebackend.room.RoomSettings;
 import lombok.Builder;
 import lombok.Getter;
 

@@ -1,4 +1,4 @@
-package com.fourarcade.arcadebackend.room.util;
+package com.fourarcade.arcadebackend.room;
 
 import org.springframework.stereotype.Component;
 

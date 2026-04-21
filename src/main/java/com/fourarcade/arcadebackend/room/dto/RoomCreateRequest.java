@@ -1,5 +1,6 @@
-package com.fourarcade.arcadebackend.room;
+package com.fourarcade.arcadebackend.room.dto;
 
+import com.fourarcade.arcadebackend.room.RoomSettings;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
