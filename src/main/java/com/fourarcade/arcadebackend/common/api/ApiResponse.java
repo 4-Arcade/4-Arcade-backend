@@ -30,6 +30,14 @@ public class ApiResponse<T> {
         return ApiResponse.<T>builder()
                 .success(true)
                 .data(data)     // 던져준 데이터
+                .path(getCurrentPath()) // 요청 온 주소 자동 추적
+                .build();
+    }
+
+    public static <T> ApiResponse<T> okWithTime(T data) {
+        return ApiResponse.<T>builder()
+                .success(true)
+                .data(data)     // 던져준 데이터
                 .serverTime(OffsetDateTime.now().toString())    // 현재 시간
                 .path(getCurrentPath()) // 요청 온 주소 자동 추적
                 .build();
@@ -53,7 +61,6 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> ok() {
         return ApiResponse.<Void>builder()
                 .success(true)
-                .serverTime(OffsetDateTime.now().toString())
                 .path(getCurrentPath())
                 .build();
     }
