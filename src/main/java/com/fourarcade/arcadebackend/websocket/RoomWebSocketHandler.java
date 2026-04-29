@@ -515,7 +515,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
 
         if (room.getParticipants().isEmpty()) {
-            redisTemplate.expire(ROOM_KEY_PREFIX + room.getRoomId(), 30, TimeUnit.MINUTES);
+            // 빈 명단 상태를 Redis에 확실하게 덮어써서 좀비 부활 방지
+            redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room, 30, TimeUnit.MINUTES);
             redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
             log.info("Room {} is empty. Will be deleted in 30 minutes.", room.getRoomId());
         } else {
