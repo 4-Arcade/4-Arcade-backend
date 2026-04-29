@@ -61,16 +61,18 @@ public class RoomService {
                         RoomRedisEntity.Participant.builder()
                                 .nickname(request.getNickname())
                                 .isHost(true)
+                                .isConnected(false)
+                                .isReady(false)
                                 .score(0)
                                 .build()
                 )))
                 .build();
 
         // Redis에 저장( Room ID 기준 & Room Code 기준 양방향 매핑)
-        // 방은 최대 2시간 동안 살아있음
+        // 방 생성 -> 아무도 없음 -> 그 상태로 아무도 안들어오면 30분 후 방 사라짐
         try {
-            redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, roomEntity, 2, TimeUnit.HOURS);
-            redisTemplate.opsForValue().set(CODE_KEY_PREFIX + roomCode, roomId.toString(), 2, TimeUnit.HOURS);
+            redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, roomEntity, 30, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(CODE_KEY_PREFIX + roomCode, roomId.toString(), 30, TimeUnit.MINUTES);
         } catch (Exception e) {
             // 직렬화 실패 시 로그 출력
             e.printStackTrace();
