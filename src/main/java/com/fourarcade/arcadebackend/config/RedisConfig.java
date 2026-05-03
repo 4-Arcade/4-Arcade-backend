@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,17 +50,10 @@ public class RedisConfig {
         return new LettuceConnectionFactory(config, clientConfig);
     }
 
-    @Bean
-    public RedisTemplate<String, Object> redisTemplate() {
-        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-        redisTemplate.setConnectionFactory(redisConnectionFactory());
-
-        // 직렬화 설정
-        // Key: 일반적인 문자열
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-
-        // ObjectMapper 세팅
+    // ObjectMapper 세팅
+    @Bean(name = "redisObjectMapper")
+    public ObjectMapper redisObjectMapper()
+    {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
@@ -69,12 +63,28 @@ public class RedisConfig {
                 .build();
         objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
 
+        return objectMapper;
+    }
+
+    // @Qualifier 로 명시
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(
+            @Qualifier("redisObjectMapper") ObjectMapper redisObjectMapper) {
+        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+        redisTemplate.setConnectionFactory(redisConnectionFactory());
+
+        // 직렬화 설정
+        // Key: 일반적인 문자열
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+
+        // 매개변수로 받은 redisObjectMapper 를 사용
         RedisSerializer<Object> customJsonSerializer = new RedisSerializer<Object>() {
             @Override
             public byte[] serialize(Object t) throws SerializationException {
                 if (t == null) return new byte[0];
                 try {
-                    return objectMapper.writeValueAsBytes(t);
+                    return redisObjectMapper.writeValueAsBytes(t);
                 } catch (JsonProcessingException e) {
                     throw new SerializationException("JSON 직렬화 에러", e);
                 }
@@ -84,7 +94,7 @@ public class RedisConfig {
             public Object deserialize(byte[] bytes) throws SerializationException {
                 if (bytes == null || bytes.length == 0) return null;
                 try {
-                    return objectMapper.readValue(bytes, Object.class);
+                    return redisObjectMapper.readValue(bytes, Object.class);
                 } catch (Exception e) {
                     throw new SerializationException("JSON 역직렬화 에러", e);
                 }
