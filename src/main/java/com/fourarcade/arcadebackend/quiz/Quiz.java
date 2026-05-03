@@ -59,4 +59,10 @@ public class Quiz {
         this.isPublic = isPublic;
         this.playCount = playCount;
     }
+
+    public void update(String title, QuizCategory category, boolean isPublic){
+        this.title = title;
+        this.category = category;
+        this.isPublic = isPublic;
+    }
 }

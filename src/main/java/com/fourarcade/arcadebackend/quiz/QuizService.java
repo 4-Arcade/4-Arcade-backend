@@ -1,6 +1,9 @@
 package com.fourarcade.arcadebackend.quiz;
 
 import com.fourarcade.arcadebackend.common.exception.AuthException;
+import com.fourarcade.arcadebackend.question.Question;
+import com.fourarcade.arcadebackend.question.QuestionRepository;
+import org.springframework.security.access.AccessDeniedException;
 import com.fourarcade.arcadebackend.user.User;
 import com.fourarcade.arcadebackend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -16,6 +21,7 @@ public class QuizService {
 
     private final QuizRepository quizRepository;
     private final UserRepository userRepository;
+    private final QuestionRepository questionRepository;
 
     @Transactional
     public QuizCreateResponse createQuiz(UUID userId, QuizCreateRequest request) {
@@ -40,5 +46,77 @@ public class QuizService {
         return quizRepository.findById(quizId)
                 .orElseThrow(() -> new AuthException("QUIZ_NOT_FOUND", "존재하지 않는 퀴즈입니다.", HttpStatus.NOT_FOUND));
     }
+    @Transactional(readOnly = true)
+    public QuizDetailResponse getQuizDetail(UUID quizId, UUID userIdOrNull) {
+        Quiz quiz = quizRepository.findWithUserById(quizId)
+                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
+        boolean isOwner = userIdOrNull != null && quiz.getUser().getId().equals(userIdOrNull);
+
+        if (!quiz.isPublic() && !isOwner) {
+            throw new AuthException("FORBIDDEN", "비공개 퀴즈는 제작자만 조회할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        List<Question> questions = questionRepository.findByQuiz_IdOrderByOrderIndexAsc(quizId);
+
+        List<QuizDetailQuestionResponse> questionResponses = questions.stream()
+                .map(QuizDetailQuestionResponse::from)
+                .collect(Collectors.toList());
+
+        return QuizDetailResponse.builder()
+                .id(quiz.getId())
+                .title(quiz.getTitle())
+                .category(quiz.getCategory().getValue())
+                .publicStatus(quiz.isPublic())
+                .playCount(quiz.getPlayCount())
+                .questionCount((int) questionRepository.countByQuiz_Id(quizId))
+                .createdBy(quiz.getUser().getNickname())
+                .createdAt(quiz.getCreatedAt())
+                .updatedAt(quiz.getUpdatedAt())
+                .questions(questionResponses)
+                .build();
+    }
+
+    @Transactional
+    public QuizUpdateResponse updateQuiz(UUID userId, UUID quizId, QuizUpdateRequest request) {
+        Quiz quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (!quiz.getUser().getId().equals(userId)) {
+            throw new AuthException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        QuizCategory category = QuizCategory.from(request.getCategory());
+
+        boolean currentIsPublic = quiz.isPublic();
+        boolean targetIsPublic = request.getIsPublic();
+
+        if (!currentIsPublic && targetIsPublic) {
+            long questionCount = questionRepository.countByQuiz_Id(quizId);
+            if (questionCount < 5) {
+                throw new AuthException("QUIZ_MIN_QUESTIONS", "공개 퀴즈는 최소 5문제가 필요합니다.", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        quiz.update(
+                request.getTitle(),
+                category,
+                targetIsPublic
+        );
+
+        return QuizUpdateResponse.from(quiz);
+    }
+
+    @Transactional
+    public void deleteQuiz(UUID userId, UUID quizId) {
+        Quiz quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (!quiz.getUser().getId().equals(userId)) {
+            throw new AuthException("FORBIDDEN", "본인 퀴즈만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        quizRepository.delete(quiz);
+        quizRepository.flush();
+    }
 }

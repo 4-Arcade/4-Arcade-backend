@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/quiz")
 @RequiredArgsConstructor
@@ -25,5 +27,35 @@ public class QuizController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(response));
+    }
+    @GetMapping("/{quizId}")
+    public ResponseEntity<ApiResponse<QuizDetailResponse>> getQuizDetail(
+            @PathVariable UUID quizId,
+            @AuthenticationPrincipal CustomUserPrincipal principal
+    ) {
+        UUID userId = principal != null ? principal.getUserId() : null;
+
+        QuizDetailResponse response = quizService.getQuizDetail(quizId, userId);
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+    @PutMapping("/{quizId}")
+    public ResponseEntity<ApiResponse<QuizUpdateResponse>> updateQuiz(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable UUID quizId,
+            @Valid @RequestBody QuizUpdateRequest request
+    ) {
+        QuizUpdateResponse response = quizService.updateQuiz(principal.getUserId(), quizId, request);
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+    @DeleteMapping("/{quizId}")
+    public ResponseEntity<ApiResponse<Void>> deleteQuiz(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable UUID quizId
+    ){
+        quizService.deleteQuiz(principal.getUserId(),quizId);
+
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }
