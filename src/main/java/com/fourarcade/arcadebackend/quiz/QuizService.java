@@ -10,6 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.UUID;
 import java.util.List;
@@ -118,5 +122,36 @@ public class QuizService {
 
         quizRepository.delete(quiz);
         quizRepository.flush();
+    }
+
+    @Transactional(readOnly = true)
+    public QuizListResponse getPublicQuizList(int page, int size, String category, String sort) {
+        if (page < 0) {
+            throw new IllegalArgumentException("페이지 번호는 0 이상이어야 합니다.");
+        }
+
+        if (size < 1 || size > 50) {
+            throw new IllegalArgumentException("페이지 크기는 1 이상 50 이하이어야 합니다.");
+        }
+
+        Sort sortOption = switch (sort) {
+            case "latest" -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case "popular" -> Sort.by(Sort.Direction.DESC, "playCount")
+                    .and(Sort.by(Sort.Direction.DESC, "createdAt"));
+            default -> throw new IllegalArgumentException("유효하지 않은 정렬 기준입니다.");
+        };
+
+        Pageable pageable = PageRequest.of(page, size, sortOption);
+
+        Page<Quiz> quizPage;
+
+        if (category == null || category.isBlank()) {
+            quizPage = quizRepository.findByIsPublicTrue(pageable);
+        } else {
+            QuizCategory quizCategory = QuizCategory.from(category);
+            quizPage = quizRepository.findByIsPublicTrueAndCategory(quizCategory, pageable);
+        }
+
+        return QuizListResponse.from(quizPage);
     }
 }

@@ -28,6 +28,17 @@ public class QuizController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(response));
     }
+    @GetMapping
+    public ResponseEntity<ApiResponse<QuizListResponse>> getPublicQuizList(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "latest") String sort
+    ) {
+        QuizListResponse response = quizService.getPublicQuizList(page, size, category, sort);
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
     @GetMapping("/{quizId}")
     public ResponseEntity<ApiResponse<QuizDetailResponse>> getQuizDetail(
             @PathVariable UUID quizId,
