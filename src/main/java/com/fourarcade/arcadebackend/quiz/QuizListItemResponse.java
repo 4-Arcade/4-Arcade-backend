@@ -1,6 +1,5 @@
 package com.fourarcade.arcadebackend.quiz;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -9,26 +8,27 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class QuizUpdateResponse {
+public class QuizListItemResponse {
 
     private UUID id;
     private String title;
     private String description;
     private String category;
+    private int questionCount;
+    private int playCount;
+    private String createdBy;
+    private OffsetDateTime createdAt;
 
-    @JsonProperty("isPublic")
-    private boolean publicStatus;
-
-    private OffsetDateTime updatedAt;
-
-    public static QuizUpdateResponse from(Quiz quiz) {
-        return QuizUpdateResponse.builder()
+    public static QuizListItemResponse from(Quiz quiz) {
+        return QuizListItemResponse.builder()
                 .id(quiz.getId())
                 .title(quiz.getTitle())
                 .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
-                .publicStatus(quiz.isPublic())
-                .updatedAt(quiz.getUpdatedAt())
+                .questionCount(quiz.getQuestionCount())
+                .playCount(quiz.getPlayCount())
+                .createdBy(quiz.getUser().getNickname())
+                .createdAt(quiz.getCreatedAt())
                 .build();
     }
 }

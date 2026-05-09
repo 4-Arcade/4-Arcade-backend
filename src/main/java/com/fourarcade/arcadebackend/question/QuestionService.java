@@ -1,6 +1,7 @@
 package com.fourarcade.arcadebackend.question;
 
-import com.fourarcade.arcadebackend.common.exception.AuthException;
+import com.fourarcade.arcadebackend.common.youtube.YoutubeValidator;
+import com.fourarcade.arcadebackend.common.exception.BusinessException;
 import com.fourarcade.arcadebackend.quiz.Quiz;
 import com.fourarcade.arcadebackend.quiz.QuizRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,24 +18,31 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final QuizRepository quizRepository;
+    private final YoutubeValidator youtubeValidator;
 
     private static final int MAX_QUESTIONS = 30;
 
     @Transactional
     public QuestionCreateResponse createQuestion(UUID userId, UUID quizId, QuestionCreateRequest request) {
         Quiz quiz = quizRepository.findById(quizId)
-                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         if (!quiz.getUser().getId().equals(userId)) {
-            throw new AuthException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
+            throw new BusinessException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
 
         validateTimeRange(request);
 
         long questionCount = questionRepository.countByQuiz_Id(quizId);
         if (questionCount >= MAX_QUESTIONS) {
-            throw new IllegalArgumentException("문제는 최대 30개까지만 추가할 수 있습니다.");
+            throw new BusinessException(
+                    "QUIZ_MAX_QUESTIONS",
+                    "문제는 최대 30개까지만 추가할 수 있습니다.",
+                    HttpStatus.BAD_REQUEST
+            );
         }
+
+        youtubeValidator.validateEmbeddable(request.getYoutubeUrl());
 
         int nextOrderIndex = questionRepository.findTopByQuiz_IdOrderByOrderIndexDesc(quizId)
                 .map(question -> question.getOrderIndex() + 1)
@@ -51,6 +59,8 @@ public class QuestionService {
                 .build();
 
         Question savedQuestion = questionRepository.save(question);
+        quiz.increaseQuestionCount();
+
         return QuestionCreateResponse.from(savedQuestion);
     }
 
@@ -66,16 +76,17 @@ public class QuestionService {
     @Transactional
     public QuestionCreateResponse updateQuestion(UUID userId, UUID quizId, UUID questionId, QuestionCreateRequest request) {
         Quiz quiz = quizRepository.findById(quizId)
-                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         if (!quiz.getUser().getId().equals(userId)) {
-            throw new AuthException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
+            throw new BusinessException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
 
         Question question = questionRepository.findByIdAndQuiz_Id(questionId, quizId)
-                .orElseThrow(() -> new AuthException("NOT_FOUND", "문제를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "문제를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         validateTimeRange(request);
+        youtubeValidator.validateEmbeddable(request.getYoutubeUrl());
 
         question.update(
                 request.getYoutubeUrl(),
@@ -90,19 +101,21 @@ public class QuestionService {
     @Transactional
     public void deleteQuestion(UUID userId, UUID quizId, UUID questionId) {
         Quiz quiz = quizRepository.findById(quizId)
-                .orElseThrow(() -> new AuthException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         if (!quiz.getUser().getId().equals(userId)) {
-            throw new AuthException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
+            throw new BusinessException("FORBIDDEN", "본인 퀴즈만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
 
         Question targetQuestion = questionRepository.findByIdAndQuiz_Id(questionId, quizId)
-                .orElseThrow(() -> new AuthException("NOT_FOUND", "문제를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "문제를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         int deletedOrderIndex = targetQuestion.getOrderIndex();
 
         questionRepository.delete(targetQuestion);
         questionRepository.flush();
+
+        quiz.decreaseQuestionCount();
 
         List<Question> remainingQuestions = questionRepository.findByQuiz_IdOrderByOrderIndexAsc(quizId);
 

@@ -14,6 +14,7 @@ public class QuizDetailResponse {
 
     private UUID id;
     private String title;
+    private String description;
     private String category;
     @JsonProperty("isPublic")
     private boolean publicStatus;

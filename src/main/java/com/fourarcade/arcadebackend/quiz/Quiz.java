@@ -29,6 +29,9 @@ public class Quiz {
     @Column(length = 50, nullable = false)
     private String title;
 
+    @Column(length = 200)
+    private String description;
+
     @Column(length = 20, nullable = false)
     private QuizCategory category;
 
@@ -52,17 +55,30 @@ public class Quiz {
     private OffsetDateTime updatedAt;
 
     @Builder
-    public Quiz(User user, String title, QuizCategory category, boolean isPublic, int playCount) {
+    public Quiz(User user, String title,String description, QuizCategory category, boolean isPublic, int playCount) {
         this.user = user;
         this.title = title;
+        this.description = description;
         this.category = category;
         this.isPublic = isPublic;
         this.playCount = playCount;
+        this.questionCount = 0;
     }
 
-    public void update(String title, QuizCategory category, boolean isPublic){
+    public void update(String title,String description, QuizCategory category, boolean isPublic){
         this.title = title;
+        this.description = description;
         this.category = category;
         this.isPublic = isPublic;
+    }
+
+    public void increaseQuestionCount(){
+        this.questionCount++;
+    }
+
+    public void decreaseQuestionCount(){
+        if(this.questionCount > 0){
+            this.questionCount--;
+        }
     }
 }

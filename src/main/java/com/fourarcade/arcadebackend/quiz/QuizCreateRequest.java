@@ -14,6 +14,9 @@ public class QuizCreateRequest {
     @Size(min = 1,max = 50, message = "제목은 1자 이상 50자 이하이어야 합니다.")
     private String title;
 
+    @Size(max = 200, message = "설명은 200자 이하이어야 합니다.")
+    private String description;
+
     @NotNull(message = "카테고리는 필수입니다.")
     private QuizCategory category;
 

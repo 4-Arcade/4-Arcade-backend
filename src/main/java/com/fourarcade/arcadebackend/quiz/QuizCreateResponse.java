@@ -13,6 +13,7 @@ public class QuizCreateResponse {
 
     private UUID id;
     private String title;
+    private String description;
     private String category;
 
     @JsonProperty("isPublic")
@@ -25,9 +26,10 @@ public class QuizCreateResponse {
         return QuizCreateResponse.builder()
                 .id(quiz.getId())
                 .title(quiz.getTitle())
+                .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
                 .publicStatus(quiz.isPublic())
-                .questionCount(0)
+                .questionCount(quiz.getQuestionCount())
                 .createdAt(quiz.getCreatedAt())
                 .build();
     }

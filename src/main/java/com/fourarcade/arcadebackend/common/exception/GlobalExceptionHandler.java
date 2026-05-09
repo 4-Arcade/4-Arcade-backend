@@ -25,6 +25,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
     }
 
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
+        ApiError error = ApiError.of(ex.getCode(), ex.getMessage(), ex.getStatus().value());
+        return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
+    }
+
     // Room 생성 예외
     @ExceptionHandler(RoomException.class)
     public ResponseEntity<ApiResponse<Void>> handleRoomException(RoomException ex) {
