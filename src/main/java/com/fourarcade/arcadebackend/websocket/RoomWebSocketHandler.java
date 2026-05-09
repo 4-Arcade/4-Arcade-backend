@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fourarcade.arcadebackend.quiz.Quiz;
 import com.fourarcade.arcadebackend.quiz.QuizService;
+import com.fourarcade.arcadebackend.room.GamePlayService;
 import com.fourarcade.arcadebackend.room.RoomRedisEntity;
 import com.fourarcade.arcadebackend.room.RoomSettings;
 import com.fourarcade.arcadebackend.websocket.dto.ErrorPayload;
@@ -31,6 +32,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();    // 기본 ObjectMapper 주입받음
     private final QuizService quizService;      // 퀴즈 문항 수 검증
+    private final GamePlayService gamePlayService;
 
     private static final String ROOM_KEY_PREFIX = "room:";
     private static final String CODE_KEY_PREFIX = "room:code:";
@@ -44,6 +46,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, String> sessionToNicknameMap = new ConcurrentHashMap<>();
 
     @Override
+    @SuppressWarnings("resource")
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         URI uri = session.getUri();
         if (uri == null) {
@@ -178,7 +181,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
     // 연결 종료
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String sessionId = session.getId();
         String roomId = sessionToRoomMap.remove(sessionId);
         String nickname = sessionToNicknameMap.remove(sessionId);
@@ -251,7 +254,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             if (!anyoneConnected) {
                 // 아무도 없으면 30분 후 자동 삭제
-                redisTemplate.expire(ROOM_KEY_PREFIX + roomId, 30, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room, 30, TimeUnit.MINUTES);
                 redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
                 log.info("Room {} is empty. Will be deleted in 30 minutes.", roomId);
             }
@@ -294,7 +297,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         // 이벤트 각 핸들러로 라우팅
         switch (event) {
             case "player:ready":
-                handlePlayerReady(session, room, nickname, data);
+                handlePlayerReady(room, nickname, data);
                 break;
             case "host:kick":
                 handleHostKick(session, room, nickname, data);
@@ -311,6 +314,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             case "player:left":
                 handlePlayerLeft(session, room, nickname);
                 break;
+            case "game:start":
+                handleGameStart(session, roomId, nickname);
+                break;
+            case "game:answer":
+                handleGameAnswer(roomId, nickname, data);
+                break;
+            case "game:restart":
+                handleGameRestart(session, roomId, nickname);
+                break;
             default:
                 log.warn("알 수 없는 이벤트 수신: {}", event);
 
@@ -318,7 +330,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     }
 
     // [C -> S] player:ready (레디 상태 변경)
-    private void handlePlayerReady(WebSocketSession session, RoomRedisEntity room, String nickname, JsonNode data) throws Exception {
+    private void handlePlayerReady(RoomRedisEntity room, String nickname, JsonNode data) {
         boolean isReady = data.path("isReady").asBoolean();
 
         RoomRedisEntity.Participant player = getParticipant(room, nickname);
@@ -570,6 +582,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         return null;
     }
 
+    // 핸들러 내부에서 세션이 있을 때 빠르게 에러 쏘는 용도
     private void sendError(WebSocketSession session, String errorCode) throws Exception {
         WsEvent<ErrorPayload> event = WsEvent.<ErrorPayload>builder()
                 .event("error")
@@ -578,8 +591,23 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
+    // GamePlayService 등 외부에서 방 번호와 닉네임으로 에러 쏘는 용도
+    public void sendError(String roomId, String nickname, String errorCode, String errorMessage) {
+        Map<String, String> errorData = Map.of(
+                "errorCode", errorCode,
+                "message", errorMessage
+        );
+
+        WsEvent<Map<String, String>> event = WsEvent.<Map<String, String>>builder()
+                .event("error")
+                .data(errorData)
+                .build();
+
+        sendToPlayer(roomId, nickname, event);  // 알아서 세션 찾아서 보내주는 헬퍼
+    }
+
     // 특정 방에 있는 모두에게 메시지
-    private void broadcastToRoom(String roomId, WsEvent<?> event, WebSocketSession excludeSession) {
+    public void broadcastToRoom(String roomId, WsEvent<?> event, WebSocketSession excludeSession) {
         Set<WebSocketSession> sessions = roomSessions.get(roomId);
         if (sessions == null || sessions.isEmpty()) return;
 
@@ -596,6 +624,32 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to broadcast message to room {}: {}", roomId, e.getMessage());
         }
+    }
+
+    // 방 전체에 현재 상태 (room:state) 브로드캐스트
+    private void broadcastRoomState(String roomId, RoomRedisEntity room) {
+        String hostNickname = room.getParticipants().stream()
+                .filter(RoomRedisEntity.Participant::getIsHost)
+                .map(RoomRedisEntity.Participant::getNickname)
+                .findFirst().orElse("Unknown");
+
+        Map<String, Object> stateData = new HashMap<>();
+        stateData.put("roomId", room.getRoomId());
+        stateData.put("roomCode", room.getRoomCode());
+        stateData.put("status", room.getStatus());
+        stateData.put("hostNickname", hostNickname);
+        stateData.put("players", room.getParticipants());
+        stateData.put("settings", room.getSettings());
+        if (room.getStatus() == RoomRedisEntity.RoomStatus.IN_GAME) {
+            stateData.put("gameProgress", room.getGameProgress());
+        }
+
+        WsEvent<Map<String, Object>> event = WsEvent.<Map<String, Object>>builder()
+                .event("room:state")
+                .data(stateData)
+                .build();
+
+        broadcastToRoom(roomId, event, null);
     }
 
     private void sendErrorAndClose(WebSocketSession session, String errorCode) throws Exception {
@@ -631,5 +685,78 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+    }
+
+    // 특정 유저에게만 메시지 전송 (Unicast)
+    public void sendToPlayer(String roomId, String nickname, WsEvent<?> event) {
+        String sessionId = sessionToNicknameMap.entrySet().stream()
+                .filter(e -> e.getValue().equals(nickname) && sessionToRoomMap.get(e.getKey()).equals(roomId))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+
+        if (sessionId != null) {
+            Set<WebSocketSession> sessions = roomSessions.get(roomId);
+            if (sessions != null) {
+                sessions.stream()
+                        .filter(s -> s.getId().equals(sessionId) && s.isOpen())
+                        .findFirst()
+                        .ifPresent(s -> {
+                            try {
+                                s.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+                            } catch (Exception ex) {
+                                log.error("개별 메시지 전송 실패: {}", ex.getMessage());
+                            }
+                        });
+            }
+        }
+    }
+
+    // game:start 핸들러
+    private void handleGameStart(WebSocketSession session, String roomId, String nickname) throws Exception {
+        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.Participant player = getParticipant(room, nickname);
+        if (player == null || !player.getIsHost()) {
+            sendError(session, "UNAUTHORIZED");
+            return;
+        }
+        gamePlayService.startGame(roomId, nickname);
+    }
+
+    // game:answer 핸들러
+    private void handleGameAnswer(String roomId, String nickname, JsonNode data) {
+        String answer = data.path("answer").asText(null);
+        if (answer != null) {
+            gamePlayService.processAnswer(roomId, nickname, answer);
+        }
+    }
+
+    // game:restart 핸들러
+    private void handleGameRestart(WebSocketSession session, String roomId, String nickname) throws Exception {
+        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.Participant player = getParticipant(room, nickname);
+
+        if (player == null || !player.getIsHost()) {
+            sendError(session, "UNAUTHORIZED");
+            return;
+        }
+        if (room.getStatus() != RoomRedisEntity.RoomStatus.RESULT) {
+            sendError(session,"INVALID_STATE");
+            return;
+        }
+
+        // WAITING 으로 초기화
+        room.setStatus(RoomRedisEntity.RoomStatus.WAITING);
+        room.getParticipants().forEach(p -> p.setIsReady(false));
+        room.setGameProgress(null); // 진행 데이터 날림
+        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room);
+
+        // 방 전체에 초기화된 상태 브로드캐스트
+        broadcastRoomState(roomId, room);
+        broadcastPlayersUpdated(roomId, room);
     }
 }
