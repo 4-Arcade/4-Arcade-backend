@@ -35,6 +35,7 @@ public class QuizService {
         Quiz quiz = Quiz.builder()
                 .user(user)
                 .title(request.getTitle())
+                .description(request.getDescription())
                 .category(request.getCategory())
                 .isPublic(request.getIsPublic())
                 .playCount(0)
@@ -70,10 +71,11 @@ public class QuizService {
         return QuizDetailResponse.builder()
                 .id(quiz.getId())
                 .title(quiz.getTitle())
+                .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
                 .publicStatus(quiz.isPublic())
                 .playCount(quiz.getPlayCount())
-                .questionCount((int) questionRepository.countByQuiz_Id(quizId))
+                .questionCount(quiz.getQuestionCount())
                 .createdBy(quiz.getUser().getNickname())
                 .createdAt(quiz.getCreatedAt())
                 .updatedAt(quiz.getUpdatedAt())
@@ -104,6 +106,7 @@ public class QuizService {
 
         quiz.update(
                 request.getTitle(),
+                request.getDescription(),
                 category,
                 targetIsPublic
         );

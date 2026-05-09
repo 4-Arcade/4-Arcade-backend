@@ -12,6 +12,7 @@ public class QuizListItemResponse {
 
     private UUID id;
     private String title;
+    private String description;
     private String category;
     private int questionCount;
     private int playCount;
@@ -22,6 +23,7 @@ public class QuizListItemResponse {
         return QuizListItemResponse.builder()
                 .id(quiz.getId())
                 .title(quiz.getTitle())
+                .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
                 .questionCount(quiz.getQuestionCount())
                 .playCount(quiz.getPlayCount())

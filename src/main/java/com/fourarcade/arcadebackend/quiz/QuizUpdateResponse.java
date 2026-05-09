@@ -13,6 +13,7 @@ public class QuizUpdateResponse {
 
     private UUID id;
     private String title;
+    private String description;
     private String category;
 
     @JsonProperty("isPublic")
@@ -24,6 +25,7 @@ public class QuizUpdateResponse {
         return QuizUpdateResponse.builder()
                 .id(quiz.getId())
                 .title(quiz.getTitle())
+                .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
                 .publicStatus(quiz.isPublic())
                 .updatedAt(quiz.getUpdatedAt())
