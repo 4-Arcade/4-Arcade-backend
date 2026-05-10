@@ -174,11 +174,28 @@ public class GamePlayService {
         if (room == null) return;
 
         RoomRedisEntity.GameProgress progress = room.getGameProgress();
-        RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
         RoomRedisEntity.PlayerGameData playerData = progress.getPlayers().get(nickname);
 
         // 이미 정답자가 나왔거나 오답 초과면 무시
         if (playerData == null || progress.isQuestionSolved()) return;
+
+        Integer wrongLimit = room.getSettings().getWrongAnswerLimit();
+
+        // 정답 체크 전 오답 한도 초과했는지 확인
+        if (wrongLimit != null && playerData.getCurrentWrongAttempts() >= wrongLimit) {
+            // 이미 기회를 다 쓴 상태에서 보냈으므로 locked 메시지 전송
+            webSocketHandler.sendToPlayer(roomId, nickname, WsEvent.builder()
+                    .event("answer:locked")
+                    .data(Map.of(
+                            "questionIndex", progress.getCurrentQuestionIndex() + 1,
+                            "message", "이미 오답을 사용했습니다"
+                    ))
+                    .build());
+            return; // 로직 종료 (정답 체크 안함)
+        }
+
+        // 정답 데이터 로드
+        RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
 
         // 다중 정답 검사 로직
         boolean isCorrect = currentQ.getAnswer().stream()
@@ -187,15 +204,6 @@ public class GamePlayService {
         if (!isCorrect) {
             // 오답 처리
             playerData.setCurrentWrongAttempts(playerData.getCurrentWrongAttempts() + 1);
-
-            Integer wrongLimit = room.getSettings().getWrongAnswerLimit();
-            if (wrongLimit != null && playerData.getCurrentWrongAttempts() >= wrongLimit) {
-                // answer:locked 개별 전송
-                webSocketHandler.sendToPlayer(roomId, nickname, WsEvent.builder()
-                        .event("answer:locked")
-                        .data(Map.of("questionIndex", progress.getCurrentQuestionIndex() + 1, "message", "이미 오답을 사용했습니다"))
-                        .build());
-            }
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
             return;
         }
@@ -245,18 +253,7 @@ public class GamePlayService {
         RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
 
         // 정답 못 맞춘 사람들 기록 처리
-        for (Map.Entry<String, RoomRedisEntity.PlayerGameData> entry : progress.getPlayers().entrySet()) {
-            RoomRedisEntity.PlayerGameData pd = entry.getValue();
-            boolean hasCorrected = pd.getHistory().stream().anyMatch(h -> h.getIndex() == progress.getCurrentQuestionIndex() + 1);
-            if (!hasCorrected) {
-                pd.getHistory().add(RoomRedisEntity.QuestionResult.builder()
-                        .index(progress.getCurrentQuestionIndex() + 1)
-                        .isCorrect(false)
-                        .score(0)
-                        .correctAnswer(currentQ.getAnswer().get(0))
-                        .build());
-            }
-        }
+        recordMissedPlayers(progress, currentQ);
         redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
 
         // 스코어보드 생성
@@ -282,6 +279,69 @@ public class GamePlayService {
             taskScheduler.schedule(() -> startCountdown(roomId, 3), Instant.now().plusSeconds(5));
         } else {
             // 게임 끝 -> 결과 화면 전송
+            room.setStatus(RoomRedisEntity.RoomStatus.RESULT);
+            redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
+            sendGameResult(room);
+        }
+    }
+
+    public void handlePlaybackError(String roomId, int reportedIndex, int errorCode) {
+        RoomRedisEntity room = getValidRoomWithProgress(roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.GameProgress progress = room.getGameProgress();
+        int currentIndex = progress.getCurrentQuestionIndex() + 1;
+
+        // 보안 및 중복 방치 체크
+        // 지금 풀고 있는 문제의 에러가 아니거나, 이미 누군가에 의해 스킵/정답 처리가 끝났다면 무시
+        if (reportedIndex != currentIndex || progress.isQuestionSolved()) {
+            return;
+        }
+
+        // 스킵 확정
+        progress.setQuestionSolved(true);
+
+        // 현재 돌아가고 있는 문제 종료 타이머 취소
+        ScheduledFuture<?> timer = roomTimers.remove(roomId);
+        if (timer != null) timer.cancel(false);
+
+        log.warn("재생 오류 보고 수신: 방 {}, 문제 {}, 에러코드 {}", roomId, reportedIndex, errorCode);
+
+        // [S -> C 전체] question:skip 전송
+        Map<String, Object> skipPayload = Map.of(
+                "questionIndex", reportedIndex,
+                "reason", "재생 오류로 인해 이 문제를 건너뜁니다.",
+                "nextIn", 3 // 3초 뒤 다음 단계 진행
+        );
+
+        webSocketHandler.broadcastToRoom(roomId,
+                WsEvent.builder().event("question:skip").data(skipPayload).build(), null);
+
+        // 3초 대기 후 다음 문제 또는 결과창으로 이동
+        taskScheduler.schedule(() -> skipAndGoNext(roomId), Instant.now().plusSeconds(3));
+    }
+
+    // 스킵 후 다음 단계로 넘어가는 헬퍼 메서드
+    private void skipAndGoNext(String roomId) {
+        RoomRedisEntity room = getValidRoomWithProgress(roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.GameProgress progress = room.getGameProgress();
+        RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
+
+        // 스킵된 문제는 모두가 오답 처리
+        recordMissedPlayers(progress, currentQ);
+        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
+
+        // 다음 문제 진행 판별
+        if (progress.getCurrentQuestionIndex() + 1 < progress.getQuestions().size()) {
+            progress.setCurrentQuestionIndex(progress.getCurrentQuestionIndex() + 1);
+            redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
+
+            // 즉시 다음 문제 카운트다운 시작
+            startCountdown(roomId, 3);
+        } else {
+            // 마지막 문제였다면 결과창으로 이동
             room.setStatus(RoomRedisEntity.RoomStatus.RESULT);
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
             sendGameResult(room);
@@ -351,6 +411,23 @@ public class GamePlayService {
             return null;
         }
         return room;
+    }
+
+    // 못 맞춘 사람 오답 기록용 공통 헬퍼 메서드
+    private void recordMissedPlayers(RoomRedisEntity.GameProgress progress, RoomRedisEntity.QuestionSnapshot currentQ) {
+        for (Map.Entry<String, RoomRedisEntity.PlayerGameData> entry : progress.getPlayers().entrySet()) {
+            RoomRedisEntity.PlayerGameData pd = entry.getValue();
+            boolean hasCorrected = pd.getHistory().stream()
+                    .anyMatch(h -> h.getIndex() == progress.getCurrentQuestionIndex() + 1);
+            if (!hasCorrected) {
+                pd.getHistory().add(RoomRedisEntity.QuestionResult.builder()
+                        .index(progress.getCurrentQuestionIndex() + 1)
+                        .isCorrect(false)
+                        .score(0)
+                        .correctAnswer(currentQ.getAnswer().get(0))
+                        .build());
+            }
+        }
     }
 
 }

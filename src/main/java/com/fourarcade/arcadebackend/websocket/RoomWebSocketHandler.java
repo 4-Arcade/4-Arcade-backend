@@ -320,12 +320,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             case "game:answer":
                 handleGameAnswer(roomId, nickname, data);
                 break;
+            case "question:playback_error":
+                handlePlaybackError(session, room, data);
+                break;
             case "game:restart":
                 handleGameRestart(session, roomId, nickname);
                 break;
             default:
                 log.warn("알 수 없는 이벤트 수신: {}", event);
-
         }
     }
 
@@ -551,6 +553,63 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         session.close(CloseStatus.NORMAL);  // 정상 종료
     }
 
+    // game:start 핸들러
+    private void handleGameStart(WebSocketSession session, String roomId, String nickname) throws Exception {
+        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.Participant player = getParticipant(room, nickname);
+        if (player == null || !player.getIsHost()) {
+            sendError(session, "UNAUTHORIZED");
+            return;
+        }
+        gamePlayService.startGame(roomId, nickname);
+    }
+
+    // game:answer 핸들러
+    private void handleGameAnswer(String roomId, String nickname, JsonNode data) {
+        String answer = data.path("answer").asText(null);
+        if (answer != null) {
+            gamePlayService.processAnswer(roomId, nickname, answer);
+        }
+    }
+
+    // game:restart 핸들러
+    private void handleGameRestart(WebSocketSession session, String roomId, String nickname) throws Exception {
+        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
+        if (room == null) return;
+
+        RoomRedisEntity.Participant player = getParticipant(room, nickname);
+
+        if (player == null || !player.getIsHost()) {
+            sendError(session, "UNAUTHORIZED");
+            return;
+        }
+        if (room.getStatus() != RoomRedisEntity.RoomStatus.RESULT) {
+            sendError(session,"INVALID_STATE");
+            return;
+        }
+
+        // WAITING 으로 초기화
+        room.setStatus(RoomRedisEntity.RoomStatus.WAITING);
+        room.getParticipants().forEach(p -> p.setIsReady(false));
+        room.setGameProgress(null); // 진행 데이터 날림
+        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room);
+
+        // 방 전체에 초기화된 상태 브로드캐스트
+        broadcastRoomState(roomId, room);
+        broadcastPlayersUpdated(roomId, room);
+    }
+
+    // 재생 오류 감지 시 서버에 보고 (question:playback_error)
+    private void handlePlaybackError(WebSocketSession session, RoomRedisEntity room, JsonNode data) {
+        int questionIndex = data.path("questionIndex").asInt();
+        int errorCode = data.path("errorCode").asInt();
+
+        // 서비스 호출
+        gamePlayService.handlePlaybackError(room.getRoomId().toString(), questionIndex, errorCode);
+    }
+
     // ------------------- Helper Methods ------------------- //
 
     // 공통 브로드캐스트 헬퍼: room:players_updated
@@ -712,51 +771,4 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    // game:start 핸들러
-    private void handleGameStart(WebSocketSession session, String roomId, String nickname) throws Exception {
-        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
-        if (room == null) return;
-
-        RoomRedisEntity.Participant player = getParticipant(room, nickname);
-        if (player == null || !player.getIsHost()) {
-            sendError(session, "UNAUTHORIZED");
-            return;
-        }
-        gamePlayService.startGame(roomId, nickname);
-    }
-
-    // game:answer 핸들러
-    private void handleGameAnswer(String roomId, String nickname, JsonNode data) {
-        String answer = data.path("answer").asText(null);
-        if (answer != null) {
-            gamePlayService.processAnswer(roomId, nickname, answer);
-        }
-    }
-
-    // game:restart 핸들러
-    private void handleGameRestart(WebSocketSession session, String roomId, String nickname) throws Exception {
-        RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
-        if (room == null) return;
-
-        RoomRedisEntity.Participant player = getParticipant(room, nickname);
-
-        if (player == null || !player.getIsHost()) {
-            sendError(session, "UNAUTHORIZED");
-            return;
-        }
-        if (room.getStatus() != RoomRedisEntity.RoomStatus.RESULT) {
-            sendError(session,"INVALID_STATE");
-            return;
-        }
-
-        // WAITING 으로 초기화
-        room.setStatus(RoomRedisEntity.RoomStatus.WAITING);
-        room.getParticipants().forEach(p -> p.setIsReady(false));
-        room.setGameProgress(null); // 진행 데이터 날림
-        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room);
-
-        // 방 전체에 초기화된 상태 브로드캐스트
-        broadcastRoomState(roomId, room);
-        broadcastPlayersUpdated(roomId, room);
-    }
 }
