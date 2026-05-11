@@ -1,5 +1,6 @@
 package com.fourarcade.arcadebackend.room;
 
+import com.fourarcade.arcadebackend.common.youtube.YoutubeValidator;
 import com.fourarcade.arcadebackend.question.Question;
 import com.fourarcade.arcadebackend.question.QuestionRepository;
 import com.fourarcade.arcadebackend.websocket.RoomWebSocketHandler;
@@ -14,8 +15,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,17 +25,20 @@ public class GamePlayService {
     private final TaskScheduler taskScheduler;  // 비동기 타이머용
     private final RoomWebSocketHandler webSocketHandler;  // 이벤트 전송용
     private final QuestionRepository questionRepository;
+    private final YoutubeValidator youtubeValidator;
 
     public GamePlayService(
             RedisTemplate<String, Object> redisTemplate,
             TaskScheduler taskScheduler,
             @Lazy RoomWebSocketHandler webSocketHandler,
-            QuestionRepository questionRepository
+            QuestionRepository questionRepository,
+            YoutubeValidator youtubeValidator
     ) {
         this.redisTemplate = redisTemplate;
         this.taskScheduler = taskScheduler;
         this.webSocketHandler = webSocketHandler;
         this.questionRepository = questionRepository;
+        this.youtubeValidator = youtubeValidator;
     }
 
     // 초당 정답 제출 횟수 제한 (Rate Limiting): roomId:nickname -> 타임스탬프 리스트
@@ -74,7 +76,7 @@ public class GamePlayService {
         // DB 엔티티를 Redis 스냅샷으로 변환 (videoId 파싱 포함)
         List<RoomRedisEntity.QuestionSnapshot> snapshots = dbQuestions.stream()
                 .map(q -> RoomRedisEntity.QuestionSnapshot.builder()
-                        .videoId(extractVideoId(q.getYoutubeUrl())) // 파싱 메서드 호출
+                        .videoId(youtubeValidator.extractVideoId(q.getYoutubeUrl()))
                         .startSec(q.getStartSec())
                         .endSec(q.getEndSec())
                         .answer(Arrays.asList(q.getAnswers()))  // String[] -> List<String> 변환
@@ -388,18 +390,6 @@ public class GamePlayService {
                         WsEvent.builder().event("game:result").data(resultData).build());
             }
         }
-    }
-
-    // Youtube URL 에서 VideoId 만 뽑아내는 메서드
-    private String extractVideoId(String url) {
-        if (url == null) return null;
-
-        String regex = "(?:youtube\\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\\.be/)([^\"&?/\\s]{11})";
-        Matcher matcher = Pattern.compile(regex).matcher(url);
-        if (matcher.find()) {
-            return matcher.group(1);    // 11자리 비디오 ID 반환
-        }
-        return null;    // 파싱 실패 시 원본 반환
     }
 
     // 중복 제거용 공통 헬퍼 메서드

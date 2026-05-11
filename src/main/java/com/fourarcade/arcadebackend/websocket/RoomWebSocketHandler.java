@@ -321,7 +321,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 handleGameAnswer(roomId, nickname, data);
                 break;
             case "question:playback_error":
-                handlePlaybackError(session, room, data);
+                handlePlaybackError(room, data);
                 break;
             case "game:restart":
                 handleGameRestart(session, roomId, nickname);
@@ -602,7 +602,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     }
 
     // 재생 오류 감지 시 서버에 보고 (question:playback_error)
-    private void handlePlaybackError(WebSocketSession session, RoomRedisEntity room, JsonNode data) {
+    private void handlePlaybackError(RoomRedisEntity room, JsonNode data) {
         int questionIndex = data.path("questionIndex").asInt();
         int errorCode = data.path("errorCode").asInt();
 
