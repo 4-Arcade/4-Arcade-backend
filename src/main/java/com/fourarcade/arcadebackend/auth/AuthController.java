@@ -1,8 +1,8 @@
 package com.fourarcade.arcadebackend.auth;
 
+import com.fourarcade.arcadebackend.auth.dto.*;
 import com.fourarcade.arcadebackend.common.api.ApiResponse;
 import com.fourarcade.arcadebackend.common.exception.AuthException;
-import com.fourarcade.arcadebackend.common.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,50 +24,49 @@ public class AuthController {
     // 회원가입
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
-            @Valid @RequestBody RegisterRequest request,
-            HttpServletResponse res) {
+            @Valid @RequestBody RegisterRequest request) {
 
         AuthResponse authResponse = authService.register(request);
-        addRefreshCookie(res, authResponse.getRefreshToken());
 
         // 201 응답 및 통일된 ApiResponse 포맷 적용
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(AuthResponse.withoutRefreshToken(authResponse)));
+                .body(ApiResponse.ok(authResponse));
     }
 
     // 로그인
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
-            @Valid @RequestBody LoginRequest request,
-            HttpServletResponse res) {
+            @Valid @RequestBody LoginRequest request) {
 
+        // 로그인 수행
         AuthResponse authResponse = authService.login(request);
-        addRefreshCookie(res, authResponse.getRefreshToken());
-        return ResponseEntity.ok(ApiResponse.ok(AuthResponse.withoutRefreshToken(authResponse)));
+
+        return ResponseEntity.ok(ApiResponse.ok(authResponse));
     }
 
     // AccessToken 재발급
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(
-            @CookieValue(value = "refreshToken", required = false) String refreshToken,
-            HttpServletResponse res) {
-
-        if (refreshToken == null) {
-            throw new AuthException("REFRESH_TOKEN_MISSING", "RefreshToken이 없습니다.", HttpStatus.BAD_REQUEST);
-        }
+            @Valid @RequestBody RefreshRequest request) {
 
         // 서비스 로직에서 토큰 재발급
-        AuthResponse authResponse = authService.refresh(refreshToken);
-
-        addRefreshCookie(res, authResponse.getRefreshToken());
+        AuthResponse authResponse = authService.refresh(request.getRefreshToken());
 
         return ResponseEntity.ok(ApiResponse.ok(AuthResponse.withoutRefreshToken(authResponse)));
+    }
+
+    @DeleteMapping("/logout")
+    public ApiResponse<Void> logout(@RequestBody LogoutRequest request) {
+        authService.logout(request.getRefreshToken());
+
+        // 데이터 없는 성공 응답 (success: true, data: null)
+        return ApiResponse.ok();
     }
 
     // RefreshToken 쿠키 설정
     private void addRefreshCookie(HttpServletResponse res, String refreshToken) {
         ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken).httpOnly(true)           // JS 접근 차단
-                .secure(true)             // HTTPS에서만 전송
+                .secure(true)             // HTTPS 에서만 전송
                 .path("/auth/refresh")    // 재발급 엔드포인트에서만 전송
                 .maxAge(Duration.ofDays(30))
                 .sameSite("Strict")

@@ -1,5 +1,8 @@
 package com.fourarcade.arcadebackend.auth;
 
+import com.fourarcade.arcadebackend.auth.dto.AuthResponse;
+import com.fourarcade.arcadebackend.auth.dto.LoginRequest;
+import com.fourarcade.arcadebackend.auth.dto.RegisterRequest;
 import com.fourarcade.arcadebackend.common.exception.AuthException;
 import com.fourarcade.arcadebackend.common.security.JwtTokenProvider;
 import com.fourarcade.arcadebackend.user.User;
@@ -80,7 +83,7 @@ public class AuthService {
         String refreshForClient = refreshPair.tokenForClient();
         byte[] refreshHash = refreshPair.tokenHash();
 
-        // db에는 해시만 저장
+        // DB 에는 해시만 저장
         refreshTokenRepository.save(RefreshToken.builder()
                 .userId(user.getId())
                 .tokenHash(refreshHash)
@@ -109,10 +112,23 @@ public class AuthService {
         User user = userRepository.findById(tokenEntity.getUserId())
                 .orElseThrow(() -> new AuthException("USER_NOT_FOUND", "유저를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
-        // 사용이 끝난 기존 리프레시 토큰은 DB에서 즉시 삭제 (또는 폐기 처리)
+        // 사용이 끝난 기존 리프레시 토큰은 DB 에서 즉시 삭제 (또는 폐기 처리)
         refreshTokenRepository.delete(tokenEntity);
 
-        //  공통 메서드를 호출하여 "새 Access + 새 Refresh" 발급!
+        //  공통 메서드를 호출하여 새 Access + 새 Refresh 발급
         return issueTokensAndRespond(user);
+    }
+
+    @Transactional
+    public void logout(String refreshTokenForClient) {
+        // 클라이언트가 보낸 원문 토큰 해시로 변환
+        byte[] hash = jwtTokenProvider.hashRefreshToken(refreshTokenForClient);
+
+        // 해시값으로 DB 조회
+        RefreshToken tokenEntity = refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)
+                .orElseThrow(() -> new AuthException("INVALID_REFRESH_TOKEN", "유효하지 않은 토큰입니다.", HttpStatus.UNAUTHORIZED));
+
+        // 토큰 삭제 (or 만료 처리)
+        refreshTokenRepository.delete(tokenEntity);
     }
 }
