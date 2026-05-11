@@ -2,17 +2,11 @@ package com.fourarcade.arcadebackend.auth;
 
 import com.fourarcade.arcadebackend.auth.dto.*;
 import com.fourarcade.arcadebackend.common.api.ApiResponse;
-import com.fourarcade.arcadebackend.common.exception.AuthException;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.time.Duration;
 
 @RestController
 @RequestMapping("/auth")
@@ -61,16 +55,5 @@ public class AuthController {
 
         // 데이터 없는 성공 응답 (success: true, data: null)
         return ApiResponse.ok();
-    }
-
-    // RefreshToken 쿠키 설정
-    private void addRefreshCookie(HttpServletResponse res, String refreshToken) {
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken).httpOnly(true)           // JS 접근 차단
-                .secure(true)             // HTTPS 에서만 전송
-                .path("/auth/refresh")    // 재발급 엔드포인트에서만 전송
-                .maxAge(Duration.ofDays(30))
-                .sameSite("Strict")
-                .build();
-        res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }
