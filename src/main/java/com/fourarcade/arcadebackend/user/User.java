@@ -39,6 +39,10 @@ public class User {
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
+    public void updateProfileImage(String newImageUrl) {
+        this.profileImg = newImageUrl;
+    }
+
     @Builder
     public User(String email, String passwordHash, String nickname) {
         this.email = email;
