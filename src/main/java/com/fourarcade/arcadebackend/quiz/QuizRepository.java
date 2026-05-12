@@ -18,4 +18,6 @@ public interface QuizRepository extends JpaRepository<Quiz, UUID> {
 
     @EntityGraph(attributePaths = {"user"})
     Page<Quiz> findByIsPublicTrueAndCategory(QuizCategory category, Pageable pageable);
+
+    Page<Quiz> findByUser_Id(UUID userId, Pageable pageable);
 }
