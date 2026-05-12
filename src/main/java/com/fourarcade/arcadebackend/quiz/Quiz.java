@@ -81,4 +81,9 @@ public class Quiz {
             this.questionCount--;
         }
     }
+
+    // 플레이 횟수 증가
+    public void incrementPlayCount(){
+        this.playCount++;
+    }
 }

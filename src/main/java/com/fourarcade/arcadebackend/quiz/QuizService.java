@@ -157,4 +157,14 @@ public class QuizService {
 
         return QuizListResponse.from(quizPage);
     }
+
+    // 게임 정상 종료 시 플레이 횟수 증가
+    @Transactional
+    public void incrementPlayCount(UUID quizId) {
+        Quiz quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new AuthException("QUIZ_NOT_FOUND", "존재하지 않는 퀴즈입니다.", HttpStatus.NOT_FOUND));
+
+        quiz.incrementPlayCount();
+    }
+
 }

@@ -53,6 +53,9 @@ public class RoomRedisEntity implements Serializable {
         // 정답자 체크용
         private boolean isQuestionSolved;
 
+        // 스킵된 문제 수 기록용
+        private int skippedQuestionCount;
+
         // 문제 스냅샷
         private List<QuestionSnapshot> questions;
 

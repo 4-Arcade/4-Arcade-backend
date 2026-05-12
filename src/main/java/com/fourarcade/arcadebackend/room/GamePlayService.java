@@ -3,6 +3,8 @@ package com.fourarcade.arcadebackend.room;
 import com.fourarcade.arcadebackend.common.youtube.YoutubeValidator;
 import com.fourarcade.arcadebackend.question.Question;
 import com.fourarcade.arcadebackend.question.QuestionRepository;
+import com.fourarcade.arcadebackend.quiz.Quiz;
+import com.fourarcade.arcadebackend.quiz.QuizService;
 import com.fourarcade.arcadebackend.websocket.RoomWebSocketHandler;
 import com.fourarcade.arcadebackend.websocket.dto.WsEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -26,19 +28,22 @@ public class GamePlayService {
     private final RoomWebSocketHandler webSocketHandler;  // 이벤트 전송용
     private final QuestionRepository questionRepository;
     private final YoutubeValidator youtubeValidator;
+    private final QuizService quizService;
 
     public GamePlayService(
             RedisTemplate<String, Object> redisTemplate,
             TaskScheduler taskScheduler,
             @Lazy RoomWebSocketHandler webSocketHandler,
             QuestionRepository questionRepository,
-            YoutubeValidator youtubeValidator
+            YoutubeValidator youtubeValidator,
+            QuizService quizService
     ) {
         this.redisTemplate = redisTemplate;
         this.taskScheduler = taskScheduler;
         this.webSocketHandler = webSocketHandler;
         this.questionRepository = questionRepository;
         this.youtubeValidator = youtubeValidator;
+        this.quizService = quizService;
     }
 
     // 초당 정답 제출 횟수 제한 (Rate Limiting): roomId:nickname -> 타임스탬프 리스트
@@ -327,12 +332,12 @@ public class GamePlayService {
 
         // 보안 및 중복 방치 체크
         // 지금 풀고 있는 문제의 에러가 아니거나, 이미 누군가에 의해 스킵/정답 처리가 끝났다면 무시
-        if (reportedIndex != currentIndex || progress.isQuestionSolved()) {
-            return;
-        }
+        if (reportedIndex != currentIndex || progress.isQuestionSolved()) return;
 
         // 스킵 확정
         progress.setQuestionSolved(true);
+        // 스킵 횟수 1 증가
+        progress.setSkippedQuestionCount(progress.getSkippedQuestionCount() + 1);
 
         // 현재 돌아가고 있는 문제 종료 타이머 취소
         ScheduledFuture<?> timer = roomTimers.remove(roomId);
@@ -351,6 +356,7 @@ public class GamePlayService {
                 WsEvent.builder().event("question:skip").data(skipPayload).build(), null);
 
         // 3초 대기 후 다음 문제 또는 결과창으로 이동
+        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
         taskScheduler.schedule(() -> skipAndGoNext(roomId), Instant.now().plusSeconds(3));
     }
 
@@ -364,7 +370,6 @@ public class GamePlayService {
 
         // 스킵된 문제는 모두가 오답 처리
         recordMissedPlayers(progress, currentQ);
-        redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
 
         // 다음 문제 진행 판별
         if (progress.getCurrentQuestionIndex() + 1 < progress.getQuestions().size()) {
@@ -372,7 +377,7 @@ public class GamePlayService {
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room);
 
             // 즉시 다음 문제 카운트다운 시작
-            startCountdown(roomId, 3);
+            startQuestion(roomId);
         } else {
             // 마지막 문제였다면 결과창으로 이동
             room.setStatus(RoomRedisEntity.RoomStatus.RESULT);
@@ -384,6 +389,14 @@ public class GamePlayService {
     // 결과 화면 (game:result) - 개인화 전송
     private void sendGameResult(RoomRedisEntity room) {
         RoomRedisEntity.GameProgress progress = room.getGameProgress();
+
+        // 전체 문제가 건너뜀 처리되었는지 판별
+        boolean isAllSkipped = (progress.getSkippedQuestionCount() == progress.getQuestions().size());
+
+        if (!isAllSkipped) {
+            // 무효 게임이 아니면
+            quizService.incrementPlayCount(room.getQuizId());
+        }
 
         // 랭킹 정렬
         List<Map<String, Object>> baseRanking = progress.getPlayers().entrySet().stream()
