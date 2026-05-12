@@ -1,4 +1,4 @@
-package com.fourarcade.arcadebackend.auth;
+package com.fourarcade.arcadebackend.auth.dto;
 
 import com.fourarcade.arcadebackend.user.User;
 import lombok.Builder;

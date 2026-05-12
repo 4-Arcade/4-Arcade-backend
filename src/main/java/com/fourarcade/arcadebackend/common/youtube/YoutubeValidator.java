@@ -52,7 +52,7 @@ public class YoutubeValidator {
         Matcher matcher = YOUTUBE_VIDEO_ID_PATTERN.matcher(youtubeUrl);
 
         if (!matcher.matches()) {
-            throw new IllegalArgumentException("유효한 YouTube URL 형식이 아닙니다.");
+            throw new BusinessException("INVALID_YOUTUBE_URL", "유효한 YouTube URL 형식이 아닙니다.", HttpStatus.BAD_REQUEST);
         }
 
         return matcher.group(1);

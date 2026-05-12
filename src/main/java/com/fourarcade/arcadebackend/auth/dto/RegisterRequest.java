@@ -1,4 +1,4 @@
-package com.fourarcade.arcadebackend.auth;
+package com.fourarcade.arcadebackend.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
