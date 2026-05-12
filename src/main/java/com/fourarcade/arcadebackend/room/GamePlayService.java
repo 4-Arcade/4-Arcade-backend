@@ -3,7 +3,6 @@ package com.fourarcade.arcadebackend.room;
 import com.fourarcade.arcadebackend.common.youtube.YoutubeValidator;
 import com.fourarcade.arcadebackend.question.Question;
 import com.fourarcade.arcadebackend.question.QuestionRepository;
-import com.fourarcade.arcadebackend.quiz.Quiz;
 import com.fourarcade.arcadebackend.quiz.QuizService;
 import com.fourarcade.arcadebackend.websocket.RoomWebSocketHandler;
 import com.fourarcade.arcadebackend.websocket.dto.WsEvent;
@@ -17,6 +16,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,6 +52,7 @@ public class GamePlayService {
     private final Map<String, ScheduledFuture<?>> roomTimers = new ConcurrentHashMap<>();
 
     private static final String ROOM_KEY_PREFIX = "room:";
+    private static final String CODE_KEY_PREFIX = "room:code:";
 
     // 게임 시작 (game:start)
     public void startGame(String roomId, String hostNickname) {
@@ -440,6 +441,10 @@ public class GamePlayService {
                 webSocketHandler.sendToPlayer(room.getRoomId().toString(), p.getNickname(),
                         WsEvent.builder().event("game:result").data(resultData).build());
             }
+
+            // game:result 전송 후 TTL 30분 재설정
+            redisTemplate.expire(ROOM_KEY_PREFIX + room.getRoomId(), 30, TimeUnit.MINUTES);
+            redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
         }
     }
 

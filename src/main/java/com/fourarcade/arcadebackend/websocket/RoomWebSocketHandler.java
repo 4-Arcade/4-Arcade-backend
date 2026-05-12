@@ -258,7 +258,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             if (!anyoneConnected) {
                 // 아무도 없으면 30분 후 자동 삭제
                 redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, room, 30, TimeUnit.MINUTES);
-                redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(CODE_KEY_PREFIX + room.getRoomCode(),
+                        roomId, 30, TimeUnit.MINUTES);
                 log.info("Room {} is empty. Will be deleted in 30 minutes.", roomId);
             }
 
@@ -542,7 +543,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         if (room.getParticipants().isEmpty()) {
             // 빈 명단 상태를 Redis 에 확실하게 덮어써서 좀비 부활 방지, 모두 나갔으면 30분 뒤 삭제
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room, 30, TimeUnit.MINUTES);
-            redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(CODE_KEY_PREFIX + room.getRoomCode(),
+                    room.getRoomId().toString(), 30, TimeUnit.MINUTES);
             log.info("Room {} is empty. Will be deleted in 30 minutes.", room.getRoomId());
         } else {
             // 방 상태 대기실로 초기화
