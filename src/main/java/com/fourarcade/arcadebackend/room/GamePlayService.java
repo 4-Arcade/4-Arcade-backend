@@ -155,8 +155,10 @@ public class GamePlayService {
         );
         webSocketHandler.broadcastToRoom(roomId, WsEvent.builder().event("question:media").data(mediaData).build(), null);
 
+        int currentIndex = progress.getCurrentQuestionIndex(); // 현재 인덱스 캡처
+
         // 타임아웃 타이머 예약 (timeLimit 초 뒤에 강제 종료)
-        ScheduledFuture<?> timer = taskScheduler.schedule(() -> endQuestion(roomId),
+        ScheduledFuture<?> timer = taskScheduler.schedule(() -> endQuestion(roomId, currentIndex),
                 Instant.now().plusSeconds(room.getSettings().getTimeLimit()));
         roomTimers.put(roomId, timer);
     }
@@ -200,8 +202,11 @@ public class GamePlayService {
         RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
 
         // 다중 정답 검사 로직
+        String normalizedInput = normalize(answer); // 유저 입력값 전처리
+
         boolean isCorrect = currentQ.getAnswer().stream()
-                .anyMatch(correctAnswer -> correctAnswer.trim().equalsIgnoreCase(answer.trim()));
+                .map(this::normalize)   // DB에 저장된 각 정답들도 똑같이 전처리
+                .anyMatch(normalizedAnswer -> normalizedAnswer.equals(normalizedInput));    // 비교
 
         if (!isCorrect) {
             // 오답 처리
@@ -211,21 +216,32 @@ public class GamePlayService {
         }
 
         // 정답 처리
-        progress.setQuestionSolved(true);
+        // 점수 및 스피드 보너스 적용
+        long elapsedMillis = System.currentTimeMillis() - progress.getQuestionStartedAt();
+        double elapsedSeconds = elapsedMillis / 1000.0;
+        int timeLimit = room.getSettings().getTimeLimit();
+        double remainingSeconds = timeLimit - elapsedSeconds;
 
-        // 기존 타이머 취소
-        ScheduledFuture<?> currentTimer = roomTimers.remove(roomId);
-        if (currentTimer != null) currentTimer.cancel(false);
+        int earnedScore = 0;
+        int speedBonus = 0;
 
-        // 점수 계산
-        int earnedScore = 1000;
+        // 남은 시간이 0보다 클 때만 점수 인정
+        if (remainingSeconds > 0) {
+            double remainingRatio = remainingSeconds / timeLimit;
+            speedBonus = (int) Math.floor(remainingRatio * 500);    // 보너스 (최대 500, 소수점 버림)
+            earnedScore = 1000 + speedBonus;    // 최종 점수 (기본 1000 + 보너스)
+        }
+
+        // 유저 데이터 업데이트
         playerData.setTotalScore(playerData.getTotalScore() + earnedScore);
+        playerData.setTotalSpeedBonus(playerData.getTotalSpeedBonus() + speedBonus);    // 보너스 누적
 
         // 결과 기록
         playerData.getHistory().add(RoomRedisEntity.QuestionResult.builder()
                 .index(progress.getCurrentQuestionIndex() + 1)
-                .isCorrect(true)
+                .isCorrect(earnedScore > 0) // 시간 내 맞췄으면 true
                 .score(earnedScore)
+                .speedBonus(speedBonus)
                 .correctAnswer(currentQ.getAnswer().get(0))
                 .build());
 
@@ -237,21 +253,36 @@ public class GamePlayService {
         // question:correct 발송
         webSocketHandler.broadcastToRoom(roomId, WsEvent.builder()
                 .event("question:correct")
-                .data(Map.of("nickname", nickname, "score", earnedScore, "timeLeft", timeLeft))
+                .data(Map.of(
+                        "nickname", nickname,
+                        "score", earnedScore,
+                        "timeLeft", timeLeft
+                ))
                 .build(), null);
 
+        int currentIndex = progress.getCurrentQuestionIndex();  // 현제 인덱스 캡쳐
+
         // 3초 뒤에 문제 완전 종료 처리
-        taskScheduler.schedule(() -> endQuestion(roomId), Instant.now().plusSeconds(3));
+        taskScheduler.schedule(() -> endQuestion(roomId, currentIndex),
+                Instant.now().plusSeconds(3));
     }
 
     // 문제 종료 (question:end)
-    private void endQuestion(String roomId) {
-        roomTimers.remove(roomId);  // 아무도 못 맞추고 끝났을 때를 대비해 타이머 맵에서 무조건 비워주기
-
+    private void endQuestion(String roomId, int expectedIndex) {
         RoomRedisEntity room = getValidRoomWithProgress(roomId);
         if (room == null) return;
 
         RoomRedisEntity.GameProgress progress = room.getGameProgress();
+
+        // 내가 종료하려던 문제가 아니면 무시 (중복 실행 방지)
+        if (progress.getCurrentQuestionIndex() != expectedIndex) {
+            log.info("방 {}: 중복된 문제 종료 요청 무시 (예상: {}, 현재: {})",
+                    roomId, expectedIndex, progress.getCurrentQuestionIndex());
+            return;
+        }
+
+        roomTimers.remove(roomId);  // 아무도 못 맞추고 끝났을 때를 대비해 타이머 맵에서 무조건 비워주기
+
         RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
 
         // 정답 못 맞춘 사람들 기록 처리
@@ -356,7 +387,14 @@ public class GamePlayService {
 
         // 랭킹 정렬
         List<Map<String, Object>> baseRanking = progress.getPlayers().entrySet().stream()
-                .sorted((e1, e2) -> Integer.compare(e2.getValue().getTotalScore(), e1.getValue().getTotalScore()))
+                .sorted((e1, e2) -> {
+                    // 1차 비교: 총점 (totalScore)
+                    int scoreCompare = Integer.compare(e2.getValue().getTotalScore(), e1.getValue().getTotalScore());
+                    if (scoreCompare != 0) return scoreCompare;
+
+                    // 2차 비교: 동점일 경우 속도 보너스 총합 (totalSpeedBonus)
+                    return Integer.compare(e2.getValue().getTotalSpeedBonus(), e1.getValue().getTotalSpeedBonus());
+                })
                 .map(e -> {
                     Map<String, Object> r = new HashMap<>();
                     r.put("nickname", e.getKey());
@@ -414,10 +452,20 @@ public class GamePlayService {
                         .index(progress.getCurrentQuestionIndex() + 1)
                         .isCorrect(false)
                         .score(0)
+                        .speedBonus(0)
                         .correctAnswer(currentQ.getAnswer().get(0))
                         .build());
             }
         }
     }
 
+    // 입력값 및 정답 전처리 헬퍼 메서드 (공백 제거, 소문자 변환, 특수문자 제거)
+    private String normalize(String text) {
+        if (text == null) return "";
+
+        // 소문자 변환, 앞뒤 공백 제거
+        String lowerTrimmed = text.toLowerCase().trim();
+        // 한글, 영문 소문자, 숫자, 공백 이외의 모든 문자 제거
+        return lowerTrimmed.replaceAll("[^가-힣a-z0-9\\s]", "");
+    }
 }

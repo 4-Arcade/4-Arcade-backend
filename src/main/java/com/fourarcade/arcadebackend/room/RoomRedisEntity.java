@@ -48,7 +48,7 @@ public class RoomRedisEntity implements Serializable {
         private int currentQuestionIndex;
         private int totalQuestionCount;
         private int timeLimit;
-        private long questionStartedAt;   // long(밀리초)로 변경
+        private long questionStartedAt;   // long(밀리초)로 변경ㄴ
 
         // 정답자 체크용
         private boolean isQuestionSolved;
@@ -73,6 +73,7 @@ public class RoomRedisEntity implements Serializable {
     @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PlayerGameData implements Serializable {
         private int totalScore;             // 현재까지 총점
+        private int totalSpeedBonus;        // 속도 보너스 총합 (동점자 정렬용)
         private int currentWrongAttempts;   // 이번 문제에서 틀린 횟수
         @Builder.Default
         private List<QuestionResult> history = new ArrayList<>();   // 개인별 1번 문제 O, 2번 문제 X 기록
@@ -83,6 +84,7 @@ public class RoomRedisEntity implements Serializable {
         private int index;
         private boolean isCorrect;
         private int score;      // 이 문제에서 얻은 점수
+        private int speedBonus; // 이 문제에서 얻은 보너스 점수
         private String correctAnswer;
     }
 }
