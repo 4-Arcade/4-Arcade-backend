@@ -68,7 +68,7 @@ public class RoomService {
                 )))
                 .build();
 
-        // Redis에 저장( Room ID 기준 & Room Code 기준 양방향 매핑)
+        // Redis 에 저장( Room ID 기준 & Room Code 기준 양방향 매핑)
         // 방 생성 -> 아무도 없음 -> 그 상태로 아무도 안들어오면 30분 후 방 사라짐
         try {
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + roomId, roomEntity, 30, TimeUnit.MINUTES);
@@ -127,7 +127,7 @@ public class RoomService {
 
         // 인원수 제한 검사 (최대 8명)
         int currentPlayers = room.getParticipants() != null ? room.getParticipants().size() : 0;
-        if (currentPlayers > MAX_PLAYERS) {
+        if (currentPlayers >= MAX_PLAYERS) {
             throw new RoomException("ROOM_FULL", "방이 꽉 찼습니다.", HttpStatus.BAD_REQUEST);
         }
 
