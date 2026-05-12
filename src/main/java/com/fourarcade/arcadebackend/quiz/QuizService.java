@@ -3,7 +3,7 @@ package com.fourarcade.arcadebackend.quiz;
 import com.fourarcade.arcadebackend.common.exception.AuthException;
 import com.fourarcade.arcadebackend.question.Question;
 import com.fourarcade.arcadebackend.question.QuestionRepository;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.scheduling.annotation.Async;
 import com.fourarcade.arcadebackend.user.User;
 import com.fourarcade.arcadebackend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -159,6 +159,7 @@ public class QuizService {
     }
 
     // 게임 정상 종료 시 플레이 횟수 증가
+    @Async
     @Transactional
     public void incrementPlayCount(UUID quizId) {
         Quiz quiz = quizRepository.findById(quizId)
