@@ -1,6 +1,7 @@
 package com.fourarcade.arcadebackend.mypage;
 
 import com.fourarcade.arcadebackend.quiz.Quiz;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -15,6 +16,8 @@ public class MyQuizListItemResponse {
     private String title;
     private String description;
     private String category;
+    @JsonProperty("isPublic")
+    private boolean publicStatus;
     private int questionCount;
     private int playCount;
     private OffsetDateTime createdAt;
@@ -26,6 +29,7 @@ public class MyQuizListItemResponse {
                 .title(quiz.getTitle())
                 .description(quiz.getDescription())
                 .category(quiz.getCategory().getValue())
+                .publicStatus(quiz.isPublic())
                 .questionCount(quiz.getQuestionCount())
                 .playCount(quiz.getPlayCount())
                 .createdAt(quiz.getCreatedAt())
