@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/quiz","/quiz/*").permitAll()
                         .requestMatchers("/room", "/room/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/ws-docs.html", "/ws-link.js").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

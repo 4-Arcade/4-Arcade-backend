@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FourArcade WebSocket API Docs</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg: #f5f6f8;
+            --surface: #ffffff;
+            --surface2: #f0f2f5;
+            --border: #e4e7ed;
+            --border-dark: #d0d5de;
+            --text: #3a3f4b;
+            --text-dim: #8a92a6;
+            --text-bright: #1a1d24;
+            --accent-c2s: #2563eb;
+            --accent-s2c: #059669;
+            --accent-c2s-bg: #eff6ff;
+            --accent-s2c-bg: #ecfdf5;
+            --tag-room: #7c3aed;
+            --tag-player: #d97706;
+            --tag-game: #dc2626;
+            --tag-question: #0891b2;
+            --tag-error: #e11d48;
+            --tag-host: #9333ea;
+            --tag-answer: #ca8a04;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Noto Sans KR', sans-serif;
+            --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 256px;
+            min-width: 256px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 0 0 40px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        .sidebar-logo {
+            padding: 22px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .sidebar-logo h1 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-bright);
+            letter-spacing: -.01em;
+        }
+        .sidebar-logo p {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 3px;
+            font-family: var(--mono);
+        }
+        .sidebar-section {
+            padding: 16px 20px 5px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 20px;
+            font-size: 12.5px;
+            color: var(--text-dim);
+            text-decoration: none;
+            transition: color .12s, background .12s;
+        }
+        .sidebar a:hover { color: var(--text-bright); background: var(--surface2); }
+        .sidebar a.active { color: var(--accent-c2s); background: var(--accent-c2s-bg); }
+
+        .dir-badge {
+            font-size: 9px;
+            font-family: var(--mono);
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .c2s { background: var(--accent-c2s-bg); color: var(--accent-c2s); }
+        .s2c { background: var(--accent-s2c-bg); color: var(--accent-s2c); }
+
+        /* ── MAIN ── */
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 44px 52px 80px;
+            max-width: 840px;
+        }
+
+        .page-header {
+            margin-bottom: 40px;
+            padding-bottom: 28px;
+            border-bottom: 1px solid var(--border);
+        }
+        .page-header h2 {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text-bright);
+            margin-bottom: 8px;
+            letter-spacing: -.02em;
+        }
+        .page-header p {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.7;
+        }
+        .conn-box {
+            margin-top: 18px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 18px;
+        }
+        .conn-box label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            display: block;
+            margin-bottom: 7px;
+        }
+        .conn-box code {
+            font-family: var(--mono);
+            font-size: 12.5px;
+            color: var(--accent-s2c);
+        }
+
+        /* ── SECTION TITLE ── */
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-dim);
+            margin: 44px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ── EVENT CARD ── */
+        .event-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: box-shadow .15s, border-color .15s;
+        }
+        .event-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-dark); }
+        .event-card.c2s-card { border-left: 3px solid var(--accent-c2s); }
+        .event-card.s2c-card { border-left: 3px solid var(--accent-s2c); }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .card-header:hover { background: var(--surface2); }
+
+        .event-name {
+            font-family: var(--mono);
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-bright);
+            flex-shrink: 0;
+        }
+        .event-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            flex: 1;
+        }
+        .tag {
+            font-size: 10px;
+            font-weight: 700;
+            font-family: var(--mono);
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            flex-shrink: 0;
+        }
+        .tag-room     { background: #f3f0ff; color: var(--tag-room); }
+        .tag-player   { background: #fffbeb; color: var(--tag-player); }
+        .tag-game     { background: #fff1f0; color: var(--tag-game); }
+        .tag-question { background: #ecfeff; color: var(--tag-question); }
+        .tag-error    { background: #fff1f3; color: var(--tag-error); }
+        .tag-host     { background: #faf5ff; color: var(--tag-host); }
+        .tag-answer   { background: #fefce8; color: var(--tag-answer); }
+
+        .chevron {
+            color: var(--text-dim);
+            transition: transform .18s;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+        .event-card.open .chevron { transform: rotate(90deg); }
+
+        .card-body {
+            display: none;
+            padding: 0 16px 16px;
+            border-top: 1px solid var(--border);
+        }
+        .event-card.open .card-body { display: block; }
+
+        /* ── PAYLOAD ── */
+        .payload-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin: 14px 0 7px;
+        }
+        pre.payload {
+            font-family: var(--mono);
+            font-size: 12px;
+            line-height: 1.75;
+            background: #f8f9fc;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px 16px;
+            overflow-x: auto;
+            color: var(--text);
+        }
+        .kw  { color: #7c3aed; }
+        .str { color: #059669; }
+        .num { color: #d97706; }
+        .key { color: #2563eb; }
+        .cm  { color: var(--text-dim); font-style: italic; }
+
+        .note {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 10px;
+            line-height: 1.65;
+            padding: 10px 14px;
+            background: #f8f9fc;
+            border-radius: 6px;
+            border-left: 2px solid var(--border-dark);
+        }
+        .note strong { color: var(--text); }
+
+        /* ── ERROR TABLE ── */
+        table.error-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+            margin-top: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        table.error-table th {
+            text-align: left;
+            padding: 8px 12px;
+            background: var(--surface2);
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+        table.error-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 11.5px;
+            vertical-align: top;
+        }
+        table.error-table td.desc {
+            font-family: var(--sans);
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+        table.error-table td.close-yes { color: var(--tag-error); font-weight: 600; }
+        table.error-table td.close-no  { color: var(--text-dim); }
+        table.error-table tr:last-child td { border-bottom: none; }
+
+        .flow-note {
+            font-size: 13px;
+            color: var(--text);
+            background: var(--accent-s2c-bg);
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 16px;
+            line-height: 1.85;
+        }
+        .flow-note strong { color: var(--accent-s2c); }
+        .flow-note code {
+            font-family: var(--mono);
+            font-size: 11.5px;
+            background: rgba(5,150,105,.08);
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: var(--accent-s2c);
+        }
+    </style>
+</head>
+<body>
+
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <h1>FourArcade WS API</h1>
+        <p>AsyncAPI v1.0.0</p>
+    </div>
+
+    <div class="sidebar-section">개요</div>
+    <a href="#overview">연결 정보</a>
+    <a href="#flow">게임 흐름</a>
+
+    <div class="sidebar-section">C → S 이벤트</div>
+    <a href="#player-ready"><span class="dir-badge c2s">C→S</span>player:ready</a>
+    <a href="#host-kick"><span class="dir-badge c2s">C→S</span>host:kick</a>
+    <a href="#host-settings"><span class="dir-badge c2s">C→S</span>host:settings_update</a>
+    <a href="#host-disband"><span class="dir-badge c2s">C→S</span>host:disband</a>
+    <a href="#host-change"><span class="dir-badge c2s">C→S</span>host:change</a>
+    <a href="#player-left-cs"><span class="dir-badge c2s">C→S</span>player:left</a>
+    <a href="#game-start"><span class="dir-badge c2s">C→S</span>game:start</a>
+    <a href="#game-answer"><span class="dir-badge c2s">C→S</span>game:answer</a>
+    <a href="#playback-error"><span class="dir-badge c2s">C→S</span>question:playback_error</a>
+    <a href="#game-restart"><span class="dir-badge c2s">C→S</span>game:restart</a>
+
+    <div class="sidebar-section">S → C 이벤트</div>
+    <a href="#room-state"><span class="dir-badge s2c">S→C</span>room:state</a>
+    <a href="#players-updated"><span class="dir-badge s2c">S→C</span>room:players_updated</a>
+    <a href="#settings-updated"><span class="dir-badge s2c">S→C</span>room:settings_updated</a>
+    <a href="#room-disbanded"><span class="dir-badge s2c">S→C</span>room:disbanded</a>
+    <a href="#player-joined"><span class="dir-badge s2c">S→C</span>player:joined</a>
+    <a href="#player-reconnected"><span class="dir-badge s2c">S→C</span>player:reconnected</a>
+    <a href="#player-disconnected"><span class="dir-badge s2c">S→C</span>player:disconnected</a>
+    <a href="#player-left-sc"><span class="dir-badge s2c">S→C</span>player:left</a>
+    <a href="#player-kicked"><span class="dir-badge s2c">S→C</span>player:kicked</a>
+    <a href="#host-changed"><span class="dir-badge s2c">S→C</span>host:changed</a>
+    <a href="#countdown"><span class="dir-badge s2c">S→C</span>game:countdown</a>
+    <a href="#question-start"><span class="dir-badge s2c">S→C</span>question:start</a>
+    <a href="#question-media"><span class="dir-badge s2c">S→C</span>question:media</a>
+    <a href="#question-correct"><span class="dir-badge s2c">S→C</span>question:correct</a>
+    <a href="#question-end"><span class="dir-badge s2c">S→C</span>question:end</a>
+    <a href="#question-skip"><span class="dir-badge s2c">S→C</span>question:skip</a>
+    <a href="#answer-locked"><span class="dir-badge s2c">S→C</span>answer:locked</a>
+    <a href="#game-result"><span class="dir-badge s2c">S→C</span>game:result</a>
+    <a href="#error-event"><span class="dir-badge s2c">S→C</span>error</a>
+</nav>
+
+<main>
+    <div class="page-header" id="overview">
+        <h2>WebSocket API 문서</h2>
+        <p>모든 메시지는 <code style="font-family:var(--mono);font-size:12px;background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--accent-s2c)">{ "event": "...", "data": { ... } }</code> 형태의 JSON으로 송수신합니다.</p>
+        <div class="conn-box">
+            <label>연결 URL</label>
+            <code>ws://&lt;host&gt;/ws/room?roomId=&lt;UUID&gt;&amp;nickname=&lt;닉네임&gt;</code>
+        </div>
+    </div>
+
+    <div id="flow" style="margin-bottom:36px">
+        <h3 style="font-size:14px;font-weight:700;color:var(--text-bright);margin-bottom:12px">게임 흐름 요약</h3>
+        <div class="flow-note">
+            <strong>접속</strong> → <code>room:state</code> (본인) + <code>player:joined</code> (전체)<br>
+            <strong>WAITING</strong>: 레디/설정 변경 → 모두 레디 시 <strong>READY</strong><br>
+            <strong>READY</strong>: 호스트 <code>game:start</code> → <code>game:countdown</code> 3→0 → <code>question:start</code> + <code>question:media</code><br>
+            <strong>IN_GAME</strong>: <code>game:answer</code> → 정답 시 <code>question:correct</code> (3초 후) or 타임아웃 → <code>question:end</code> → 반복 or <code>game:result</code><br>
+            <strong>RESULT</strong>: 호스트 <code>game:restart</code> → WAITING 초기화
+        </div>
+    </div>
+
+    <!-- ════ C → S ════ -->
+    <div class="section-title">클라이언트 → 서버</div>
+
+    <div class="event-card c2s-card" id="player-ready">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:ready</span>
+            <span class="event-desc">레디 상태 토글 (비-호스트 전용)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:ready"</span>,
+<span class="key">"data"</span>: { <span class="key">"isReady"</span>: <span class="kw">true</span> }</pre>
+            <div class="note">모든 비-호스트 접속자가 레디이면 방 상태가 <strong>READY</strong>로 전환됩니다. 2명 이상 필요.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="host-kick">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-host">host</span>
+            <span class="event-name">host:kick</span>
+            <span class="event-desc">플레이어 강퇴 (호스트 전용)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"host:kick"</span>,
+<span class="key">"data"</span>: { <span class="key">"targetNickname"</span>: <span class="str">"강퇴할닉네임"</span> }</pre>
+            <div class="note">강퇴 대상에게 <strong>player:kicked</strong> 전송 후 세션 강제 종료. 나머지에게 <strong>player:left</strong> 브로드캐스트.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="host-settings">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-host">host</span>
+            <span class="event-name">host:settings_update</span>
+            <span class="event-desc">방 설정 변경 (WAITING·READY 상태에서만)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"host:settings_update"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"settings"</span>: {
+    <span class="key">"questionCount"</span>: <span class="num">10</span>,    <span class="cm">// 5~20, 퀴즈 최대 문제 수 이하</span>
+    <span class="key">"timeLimit"</span>: <span class="num">20</span>,        <span class="cm">// 10~30 (초)</span>
+    <span class="key">"wrongAnswerLimit"</span>: <span class="kw">null</span>, <span class="cm">// null = 무제한</span>
+    <span class="key">"showAnswer"</span>: <span class="kw">true</span>
+  }
+}</pre>
+            <div class="note">READY 상태에서 변경 시 WAITING으로 롤백, 모든 플레이어 레디 해제됩니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="host-disband">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-host">host</span>
+            <span class="event-name">host:disband</span>
+            <span class="event-desc">방 해산 (호스트 전용)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"host:disband"</span>,
+<span class="key">"data"</span>: {}</pre>
+            <div class="note">전체에게 <strong>room:disbanded</strong> 전송 후 Redis 키 삭제, 모든 세션 종료.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="host-change">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-host">host</span>
+            <span class="event-name">host:change</span>
+            <span class="event-desc">호스트 권한 수동 이양</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"host:change"</span>,
+<span class="key">"data"</span>: { <span class="key">"targetNickname"</span>: <span class="str">"새로운호스트"</span> }</pre>
+            <div class="note">방 상태 WAITING으로 변경, 모두 레디 해제됩니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="player-left-cs">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:left</span>
+            <span class="event-desc">자발적 퇴장</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:left"</span>,
+<span class="key">"data"</span>: {}</pre>
+            <div class="note">IN_GAME 중 퇴장 후 접속자 1명 이하이면 <strong>NOT_ENOUGH_PLAYERS</strong> 에러와 함께 게임 강제 종료.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="game-start">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-game">game</span>
+            <span class="event-name">game:start</span>
+            <span class="event-desc">게임 시작 요청 (호스트, READY 상태)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"game:start"</span>,
+<span class="key">"data"</span>: {}</pre>
+            <div class="note">성공 시 <strong>game:countdown</strong>(3→2→1→0) 후 <strong>question:start</strong> + <strong>question:media</strong> 순서로 전송.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="game-answer">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-game">game</span>
+            <span class="event-name">game:answer</span>
+            <span class="event-desc">정답 제출 (초당 5회 Rate Limit)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"game:answer"</span>,
+<span class="key">"data"</span>: { <span class="key">"answer"</span>: <span class="str">"정답문자열"</span> }</pre>
+            <div class="note"><strong>정답 판정:</strong> 소문자 변환 + 앞뒤 공백 제거 + 한글·영소문자·숫자·공백 외 특수문자 제거 후 비교. 다중 정답 중 하나만 맞아도 정답. 오답 한도 초과 시 <strong>answer:locked</strong> 수신.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="playback-error">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:playback_error</span>
+            <span class="event-desc">YouTube 재생 오류 보고 → 문제 스킵</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:playback_error"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"questionIndex"</span>: <span class="num">3</span>,   <span class="cm">// 현재 문제 번호 (1-based)</span>
+  <span class="key">"errorCode"</span>: <span class="num">150</span>     <span class="cm">// YouTube Player API 에러 코드</span>
+}</pre>
+            <div class="note">서버는 해당 문제를 스킵하고 <strong>question:skip</strong>을 전체 브로드캐스트합니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card c2s-card" id="game-restart">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-game">game</span>
+            <span class="event-name">game:restart</span>
+            <span class="event-desc">게임 재시작 (호스트, RESULT 상태)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"game:restart"</span>,
+<span class="key">"data"</span>: {}</pre>
+            <div class="note">WAITING 초기화 + 점수·진행 데이터 리셋 후 <strong>room:state</strong> + <strong>room:players_updated</strong> 전체 브로드캐스트.</div>
+        </div>
+    </div>
+
+    <!-- ════ S → C ════ -->
+    <div class="section-title">서버 → 클라이언트</div>
+
+    <div class="event-card s2c-card" id="room-state">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-room">room</span>
+            <span class="event-name">room:state</span>
+            <span class="event-desc">방 전체 상태 스냅샷</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"room:state"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"roomId"</span>: <span class="str">"uuid"</span>,
+  <span class="key">"roomCode"</span>: <span class="str">"ABC123"</span>,
+  <span class="key">"status"</span>: <span class="str">"WAITING"</span>,    <span class="cm">// WAITING | READY | IN_GAME | RESULT</span>
+  <span class="key">"hostNickname"</span>: <span class="str">"호스트명"</span>,
+  <span class="key">"players"</span>: [
+    { <span class="key">"nickname"</span>: <span class="str">"닉네임"</span>, <span class="key">"isHost"</span>: <span class="kw">false</span>, <span class="key">"isReady"</span>: <span class="kw">true</span>, <span class="key">"isConnected"</span>: <span class="kw">true</span>, <span class="key">"score"</span>: <span class="num">0</span> }
+  ],
+  <span class="key">"settings"</span>: { <span class="cm">/* RoomSettings */</span> },
+  <span class="key">"gameProgress"</span>: <span class="kw">null</span>    <span class="cm">// IN_GAME 상태일 때만 포함</span>
+}</pre>
+            <div class="note">접속 직후 <strong>본인에게만</strong> 전송. <strong>game:restart</strong> 후에는 전체 브로드캐스트.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="players-updated">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-room">room</span>
+            <span class="event-name">room:players_updated</span>
+            <span class="event-desc">플레이어 목록·방 상태 변경 브로드캐스트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"room:players_updated"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"status"</span>: <span class="str">"READY"</span>,
+  <span class="key">"players"</span>: [ <span class="cm">/* Participant[] */</span> ]
+}</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="settings-updated">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-room">room</span>
+            <span class="event-name">room:settings_updated</span>
+            <span class="event-desc">방 설정 변경 브로드캐스트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"room:settings_updated"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"settings"</span>: {
+    <span class="key">"questionCount"</span>: <span class="num">10</span>, <span class="key">"timeLimit"</span>: <span class="num">20</span>,
+    <span class="key">"wrongAnswerLimit"</span>: <span class="kw">null</span>, <span class="key">"showAnswer"</span>: <span class="kw">true</span>
+  }
+}</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="room-disbanded">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-room">room</span>
+            <span class="event-name">room:disbanded</span>
+            <span class="event-desc">방 해산 알림 (수신 후 연결 종료)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"room:disbanded"</span>,
+<span class="key">"data"</span>: { <span class="key">"message"</span>: <span class="str">"방장이 방을 해산했습니다."</span> }</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="player-joined">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:joined</span>
+            <span class="event-desc">신규 플레이어 입장</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:joined"</span>,
+<span class="key">"data"</span>: { <span class="key">"nickname"</span>: <span class="str">"신규닉네임"</span>, <span class="key">"playerCount"</span>: <span class="num">3</span> }</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="player-reconnected">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:reconnected</span>
+            <span class="event-desc">플레이어 재접속</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:reconnected"</span>,
+<span class="key">"data"</span>: { <span class="key">"nickname"</span>: <span class="str">"재접속닉네임"</span> }</pre>
+            <div class="note">30초 이내 재접속 또는 RESULT 상태에서는 기존 데이터를 유지하며 복귀.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="player-disconnected">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:disconnected</span>
+            <span class="event-desc">비정상 연결 끊김 알림</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:disconnected"</span>,
+<span class="key">"data"</span>: { <span class="key">"nickname"</span>: <span class="str">"튕긴닉네임"</span>, <span class="key">"reconnectTimeoutSec"</span>: <span class="num">30</span> }</pre>
+            <div class="note">30초 안에 재접속 없으면 서버가 자동 퇴장 처리합니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="player-left-sc">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:left</span>
+            <span class="event-desc">퇴장·강퇴·타임아웃 브로드캐스트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:left"</span>,
+<span class="key">"data"</span>: { <span class="key">"nickname"</span>: <span class="str">"나간닉네임"</span>, <span class="key">"playerCount"</span>: <span class="num">2</span> }</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="player-kicked">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-player">player</span>
+            <span class="event-name">player:kicked</span>
+            <span class="event-desc">강퇴된 본인에게만 전송</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"player:kicked"</span>,
+<span class="key">"data"</span>: { <span class="key">"message"</span>: <span class="str">"방에서 강퇴되었습니다"</span> }</pre>
+            <div class="note">수신 직후 세션이 강제 종료됩니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="host-changed">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-host">host</span>
+            <span class="event-name">host:changed</span>
+            <span class="event-desc">호스트 변경 브로드캐스트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"host:changed"</span>,
+<span class="key">"data"</span>: { <span class="key">"newHostNickname"</span>: <span class="str">"새방장닉네임"</span> }</pre>
+            <div class="note">수동 이양·호스트 튕김·퇴장·타임아웃 강퇴 시 모두 발생합니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="countdown">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-game">game</span>
+            <span class="event-name">game:countdown</span>
+            <span class="event-desc">게임 시작 카운트다운 (1초 간격)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"game:countdown"</span>,
+<span class="key">"data"</span>: { <span class="key">"count"</span>: <span class="num">3</span> }  <span class="cm">// 3 → 2 → 1 → 0</span></pre>
+            <div class="note">count 0 직후 <strong>question:start</strong>가 전송됩니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="question-start">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:start</span>
+            <span class="event-desc">문제 시작 정보 (videoId 없음)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:start"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"index"</span>: <span class="num">1</span>,          <span class="cm">// 1-based</span>
+  <span class="key">"totalCount"</span>: <span class="num">10</span>,
+  <span class="key">"timeLimit"</span>: <span class="num">20</span>,    <span class="cm">// 초</span>
+  <span class="key">"hint"</span>: <span class="str">"힌트텍스트"</span>  <span class="cm">// null 가능</span>
+}</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="question-media">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:media</span>
+            <span class="event-desc">재생 미디어 정보 (question:start 직후)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:media"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"videoId"</span>: <span class="str">"dQw4w9WgXcQ"</span>,
+  <span class="key">"startSec"</span>: <span class="num">30.0</span>,
+  <span class="key">"endSec"</span>: <span class="num">60.0</span>
+}</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="question-correct">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:correct</span>
+            <span class="event-desc">정답자 발생 브로드캐스트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:correct"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"nickname"</span>: <span class="str">"정답자닉네임"</span>,
+  <span class="key">"score"</span>: <span class="num">1350</span>,      <span class="cm">// 기본 1000 + 속도 보너스(최대 500)</span>
+  <span class="key">"timeLeft"</span>: <span class="num">14</span>     <span class="cm">// 남은 초</span>
+}</pre>
+            <div class="note">수신 3초 후 <strong>question:end</strong>가 옵니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="question-end">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:end</span>
+            <span class="event-desc">문제 종료 및 중간 스코어보드</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:end"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"correctAnswer"</span>: <span class="str">"정답"</span>,   <span class="cm">// showAnswer=false 면 null</span>
+  <span class="key">"scores"</span>: [
+    { <span class="key">"nickname"</span>: <span class="str">"닉네임"</span>, <span class="key">"questionScore"</span>: <span class="num">1350</span>, <span class="key">"totalScore"</span>: <span class="num">2700</span> }
+  ]
+}</pre>
+            <div class="note">마지막 문제가 아니면 5초 후 <strong>game:countdown</strong> 재개. 마지막이면 <strong>game:result</strong>로 전환.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="question-skip">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-question">question</span>
+            <span class="event-name">question:skip</span>
+            <span class="event-desc">재생 오류로 문제 스킵</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"question:skip"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"questionIndex"</span>: <span class="num">3</span>,
+  <span class="key">"reason"</span>: <span class="str">"재생 오류로 인해 이 문제를 건너뜁니다."</span>,
+  <span class="key">"nextIn"</span>: <span class="num">3</span>
+}</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="answer-locked">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-answer">answer</span>
+            <span class="event-name">answer:locked</span>
+            <span class="event-desc">오답 한도 초과 (본인에게만)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"answer:locked"</span>,
+<span class="key">"data"</span>: { <span class="key">"questionIndex"</span>: <span class="num">3</span>, <span class="key">"message"</span>: <span class="str">"이미 오답을 사용했습니다"</span> }</pre>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="game-result">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-game">game</span>
+            <span class="event-name">game:result</span>
+            <span class="event-desc">최종 결과 (개인화, 본인에게만)</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"game:result"</span>,
+<span class="key">"data"</span>: {
+  <span class="key">"ranking"</span>: [
+    { <span class="key">"nickname"</span>: <span class="str">"1등"</span>, <span class="key">"totalScore"</span>: <span class="num">8500</span>, <span class="key">"rank"</span>: <span class="num">1</span>, <span class="key">"isMe"</span>: <span class="kw">true</span> }
+  ],
+  <span class="key">"myQuestions"</span>: [
+    { <span class="key">"index"</span>: <span class="num">1</span>, <span class="key">"isCorrect"</span>: <span class="kw">true</span>, <span class="key">"score"</span>: <span class="num">1350</span>, <span class="key">"speedBonus"</span>: <span class="num">350</span>, <span class="key">"correctAnswer"</span>: <span class="str">"정답"</span> }
+  ]
+}</pre>
+            <div class="note">동점 시 <strong>speedBonus 총합</strong>으로 순위를 가립니다.</div>
+        </div>
+    </div>
+
+    <div class="event-card s2c-card" id="error-event">
+        <div class="card-header" onclick="toggle(this)">
+            <span class="tag tag-error">error</span>
+            <span class="event-name">error</span>
+            <span class="event-desc">에러 이벤트</span>
+            <span class="chevron">▶</span>
+        </div>
+        <div class="card-body">
+            <div class="payload-label">Payload</div>
+            <pre class="payload"><span class="key">"event"</span>: <span class="str">"error"</span>,
+<span class="key">"data"</span>: { <span class="key">"errorCode"</span>: <span class="str">"ROOM_NOT_FOUND"</span>, <span class="key">"message"</span>: <span class="str">"..."</span> }</pre>
+            <table class="error-table" style="margin-top:14px">
+                <tr><th>errorCode</th><th>설명</th><th>연결 종료</th></tr>
+                <tr><td>ROOM_NOT_FOUND</td><td class="desc">해당 방 없음</td><td class="close-yes">✓</td></tr>
+                <tr><td>NICKNAME_TAKEN</td><td class="desc">닉네임 이미 사용 중</td><td class="close-yes">✓</td></tr>
+                <tr><td>GAME_IN_PROGRESS</td><td class="desc">게임 중 신규 입장 불가</td><td class="close-yes">✓</td></tr>
+                <tr><td>ROOM_FULL</td><td class="desc">방 인원 초과 (최대 8명)</td><td class="close-yes">✓</td></tr>
+                <tr><td>UNAUTHORIZED</td><td class="desc">호스트 권한 없음</td><td class="close-no">✗</td></tr>
+                <tr><td>INVALID_SETTINGS</td><td class="desc">유효하지 않은 설정값</td><td class="close-no">✗</td></tr>
+                <tr><td>EXCEEDS_MAX_QUESTIONS</td><td class="desc">문제 수가 퀴즈 최대치 초과</td><td class="close-no">✗</td></tr>
+                <tr><td>INVALID_STATE</td><td class="desc">현재 상태에서 불가능한 요청</td><td class="close-no">✗</td></tr>
+                <tr><td>NOT_ENOUGH_PLAYERS</td><td class="desc">2명 미만으로 게임 강제 종료</td><td class="close-no">✗</td></tr>
+                <tr><td>NO_QUESTIONS</td><td class="desc">퀴즈에 등록된 문제 없음</td><td class="close-no">✗</td></tr>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<script>
+    function toggle(header) {
+        header.parentElement.classList.toggle('open');
+    }
+    document.querySelectorAll('.sidebar a[href]').forEach(a => {
+        a.addEventListener('click', () => {
+            document.querySelectorAll('.sidebar a').forEach(x => x.classList.remove('active'));
+            a.classList.add('active');
+        });
+    });
+</script>
+</body>
+</html>
