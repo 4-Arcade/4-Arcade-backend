@@ -24,7 +24,7 @@ public class MypageService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public MyQuizListResponse getMyQuizzes(UUID userId, int page, int size) {
+    public MyQuizListResponse getMyQuizzes(UUID userId, int page, int size, String keyword) {
         if (page < 0) {
             throw new IllegalArgumentException("페이지 번호는 0 이상이어야 합니다.");
         }
@@ -39,7 +39,24 @@ public class MypageService {
                 Sort.by(Sort.Direction.DESC, "updatedAt")
         );
 
-        Page<Quiz> quizPage = quizRepository.findByUser_Id(userId, pageable);
+        String normalizedKeyword = null;
+        if(keyword != null && !keyword.isBlank()){
+            normalizedKeyword = keyword.trim();
+        }
+
+        Page<Quiz> quizPage;
+
+        if (normalizedKeyword == null) {
+            quizPage = quizRepository.findByUser_Id(userId, pageable);
+        } else {
+            quizPage = quizRepository.findByUser_IdAndTitleContainingIgnoreCaseOrUser_IdAndDescriptionContainingIgnoreCase(
+                    userId,
+                    normalizedKeyword,
+                    userId,
+                    normalizedKeyword,
+                    pageable
+            );
+        }
 
         return MyQuizListResponse.from(quizPage);
     }

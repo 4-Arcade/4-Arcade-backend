@@ -128,7 +128,7 @@ public class QuizService {
     }
 
     @Transactional(readOnly = true)
-    public QuizListResponse getPublicQuizList(int page, int size, String category, String sort) {
+    public QuizListResponse getPublicQuizList(int page, int size, String category, String sort, String keyword) {
         if (page < 0) {
             throw new IllegalArgumentException("페이지 번호는 0 이상이어야 합니다.");
         }
@@ -146,13 +146,42 @@ public class QuizService {
 
         Pageable pageable = PageRequest.of(page, size, sortOption);
 
+        QuizCategory quizCategory = null;
+        if(category != null && !category.isBlank()){
+            quizCategory = QuizCategory.from(category);
+        }
+
+        String normalizedKeyword = null;
+        if(keyword != null && !keyword.isBlank()){
+            normalizedKeyword = keyword.trim();
+        }
+
         Page<Quiz> quizPage;
 
-        if (category == null || category.isBlank()) {
-            quizPage = quizRepository.findByIsPublicTrue(pageable);
+        if (normalizedKeyword == null) {
+            if (quizCategory == null) {
+                quizPage = quizRepository.findByIsPublicTrue(pageable);
+            } else {
+                quizPage = quizRepository.findByIsPublicTrueAndCategory(quizCategory, pageable);
+            }
         } else {
-            QuizCategory quizCategory = QuizCategory.from(category);
-            quizPage = quizRepository.findByIsPublicTrueAndCategory(quizCategory, pageable);
+            if (quizCategory == null) {
+                quizPage = quizRepository
+                        .findByIsPublicTrueAndTitleContainingIgnoreCaseOrIsPublicTrueAndDescriptionContainingIgnoreCase(
+                                normalizedKeyword,
+                                normalizedKeyword,
+                                pageable
+                        );
+            } else {
+                quizPage = quizRepository
+                        .findByIsPublicTrueAndCategoryAndTitleContainingIgnoreCaseOrIsPublicTrueAndCategoryAndDescriptionContainingIgnoreCase(
+                                quizCategory,
+                                normalizedKeyword,
+                                quizCategory,
+                                normalizedKeyword,
+                                pageable
+                        );
+            }
         }
 
         return QuizListResponse.from(quizPage);

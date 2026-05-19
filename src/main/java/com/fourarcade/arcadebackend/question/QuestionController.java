@@ -41,6 +41,17 @@ public class QuestionController {
 
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
+    @GetMapping("/{questionId}")
+    public ResponseEntity<ApiResponse<QuestionDetailResponse>> getQuestionDetail(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable UUID quizId,
+            @PathVariable UUID questionId
+    ) {
+        QuestionDetailResponse response =
+                questionService.getQuestionDetail(principal.getUserId(), quizId, questionId);
+
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
     @DeleteMapping("/{questionId}")
     public ResponseEntity<ApiResponse<Void>> deleteQuestion(
             @AuthenticationPrincipal CustomUserPrincipal principal,

@@ -19,10 +19,11 @@ public class MypageController {
     public ResponseEntity<ApiResponse<MyQuizListResponse>> getMyQuizzes(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword
     ) {
         MyQuizListResponse response =
-                mypageService.getMyQuizzes(principal.getUserId(), page, size);
+                mypageService.getMyQuizzes(principal.getUserId(), page, size, keyword);
 
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

@@ -33,9 +33,10 @@ public class QuizController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(required = false) String category,
-            @RequestParam(defaultValue = "latest") String sort
+            @RequestParam(defaultValue = "latest") String sort,
+            @RequestParam(required = false) String keyword
     ) {
-        QuizListResponse response = quizService.getPublicQuizList(page, size, category, sort);
+        QuizListResponse response = quizService.getPublicQuizList(page, size, category, sort, keyword);
 
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

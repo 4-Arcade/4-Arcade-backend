@@ -125,4 +125,18 @@ public class QuestionService {
             }
         }
     }
+    @Transactional(readOnly = true)
+    public QuestionDetailResponse getQuestionDetail(UUID userId, UUID quizId, UUID questionId) {
+        Quiz quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "퀴즈를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (!quiz.getUser().getId().equals(userId)) {
+            throw new BusinessException("FORBIDDEN", "본인 퀴즈만 조회할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        Question question = questionRepository.findByIdAndQuiz_Id(questionId, quizId)
+                .orElseThrow(() -> new BusinessException("NOT_FOUND", "문제를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        return QuestionDetailResponse.from(question);
+    }
 }
