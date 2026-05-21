@@ -122,8 +122,9 @@ public class GamePlayService {
             taskScheduler.schedule(() -> startCountdown(roomId, count - 1),
                     Instant.now().plusSeconds(1));
         } else {
-            // 카운트다운 종료 -> 첫 번째 문제 시작
-            startQuestion(roomId);
+            // count=0 "GO!" 표시 시간 확보 후 문제 시작
+            taskScheduler.schedule(() -> startQuestion(roomId),
+                    Instant.now().plusMillis(700));
         }
     }
 
@@ -516,7 +517,7 @@ public class GamePlayService {
     private List<Map<String, Object>> buildPersonalRanking(List<Map<String, Object>> baseRanking, String nickname) {
         return baseRanking.stream()
                 .map(rankObj -> {
-                    Map<String, Object> r = new HashMap<>();
+                    Map<String, Object> r = new HashMap<>(rankObj); // 빈 맵 -> 원본 복사
                     r.put("isMe", nickname.equals(rankObj.get("nickname")));
                     return r;
                 })
