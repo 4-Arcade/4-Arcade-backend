@@ -90,6 +90,8 @@ public class GamePlayService {
                         .build())
                 .collect(Collectors.toList());
 
+        Collections.shuffle(snapshots); // 셔플 추가
+
         // gameProgress 초기화
         RoomRedisEntity.GameProgress progress = new RoomRedisEntity.GameProgress();
         progress.setQuestions(snapshots);
@@ -112,10 +114,11 @@ public class GamePlayService {
 
     // 카운트다운 (game:countdown)
     private void startCountdown(String roomId, int count) {
-        if (count > 0) {
-            webSocketHandler.broadcastToRoom(roomId, WsEvent.builder().event("game:countdown").data(Map.of("count", count)).build(), null);
+        webSocketHandler.broadcastToRoom(roomId,
+                WsEvent.builder().event("game:countdown").data(Map.of("count", count)).build(), null);
 
-            // 1초 뒤에 다음 카운트 실행
+        if (count > 0) {
+           // 1초 뒤에 다음 카운트 실행
             taskScheduler.schedule(() -> startCountdown(roomId, count - 1),
                     Instant.now().plusSeconds(1));
         } else {
@@ -400,27 +403,7 @@ public class GamePlayService {
         }
 
         // 랭킹 정렬
-        List<Map<String, Object>> baseRanking = progress.getPlayers().entrySet().stream()
-                .sorted((e1, e2) -> {
-                    // 1차 비교: 총점 (totalScore)
-                    int scoreCompare = Integer.compare(e2.getValue().getTotalScore(), e1.getValue().getTotalScore());
-                    if (scoreCompare != 0) return scoreCompare;
-
-                    // 2차 비교: 동점일 경우 속도 보너스 총합 (totalSpeedBonus)
-                    return Integer.compare(e2.getValue().getTotalSpeedBonus(), e1.getValue().getTotalSpeedBonus());
-                })
-                .map(e -> {
-                    Map<String, Object> r = new HashMap<>();
-                    r.put("nickname", e.getKey());
-                    r.put("totalScore", e.getValue().getTotalScore());
-                    return r;
-                })
-                .toList();
-
-        // 등수 부여
-        for (int i = 0; i < baseRanking.size(); i++) {
-            baseRanking.get(i).put("rank", i + 1);
-        }
+        List<Map<String, Object>> baseRanking = buildBaseRanking(progress);
 
         // 각 유저별로 개인화(is Me, MyQuestions)하여 전송
         for (RoomRedisEntity.Participant p : room.getParticipants()) {
@@ -446,6 +429,24 @@ public class GamePlayService {
             redisTemplate.expire(ROOM_KEY_PREFIX + room.getRoomId(), 30, TimeUnit.MINUTES);
             redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
         }
+    }
+
+    // RESULT 상태면 game:result 개인화 전송 메서드
+    public void sendGameResultToPlayer(String roomId, String nickname) {
+        RoomRedisEntity room = getValidRoomWithProgress(roomId);
+        if (room == null || room.getStatus() != RoomRedisEntity.RoomStatus.RESULT) return;
+
+        RoomRedisEntity.GameProgress progress = room.getGameProgress();
+        RoomRedisEntity.PlayerGameData playerData = progress.getPlayers().get(nickname);
+        if (playerData == null) return;
+
+        Map<String, Object> resultData = Map.of(
+                "ranking", buildPersonalRanking(buildBaseRanking(progress), nickname),
+                "myQuestions", playerData.getHistory()
+        );
+
+        webSocketHandler.sendToPlayer(roomId, nickname,
+                WsEvent.builder().event("game:result").data(resultData).build());
     }
 
     // 중복 제거용 공통 헬퍼 메서드
@@ -485,5 +486,40 @@ public class GamePlayService {
         String lowerTrimmed = text.toLowerCase().trim();
         // 한글, 영문 소문자, 숫자, 공백 이외의 모든 문자 제거
         return lowerTrimmed.replaceAll("[^가-힣a-z0-9\\s]", "");
+    }
+
+    // 공통 헬퍼: 랭킹 정렬 + 등수 부여
+    private List<Map<String, Object>> buildBaseRanking(RoomRedisEntity.GameProgress progress) {
+        List<Map<String, Object>> baseRanking = progress.getPlayers().entrySet().stream()
+                .sorted((e1, e2) -> {
+                    int scoreCompare = Integer.compare(
+                            e2.getValue().getTotalScore(), e1.getValue().getTotalScore());
+                    if (scoreCompare != 0) return scoreCompare;
+                    return Integer.compare(
+                            e2.getValue().getTotalSpeedBonus(), e1.getValue().getTotalSpeedBonus());
+                })
+                .map(e -> {
+                    Map<String, Object> r = new HashMap<>();
+                    r.put("nickname", e.getKey());
+                    r.put("totalScore", e.getValue().getTotalScore());
+                    return r;
+                })
+                .toList();
+
+        for (int i = 0; i < baseRanking.size(); i++) {
+            baseRanking.get(i).put("rank", i + 1);
+        }
+        return baseRanking;
+    }
+
+    // 공통 헬퍼: isMe 주입
+    private List<Map<String, Object>> buildPersonalRanking(List<Map<String, Object>> baseRanking, String nickname) {
+        return baseRanking.stream()
+                .map(rankObj -> {
+                    Map<String, Object> r = new HashMap<>();
+                    r.put("isMe", nickname.equals(rankObj.get("nickname")));
+                    return r;
+                })
+                .toList();
     }
 }

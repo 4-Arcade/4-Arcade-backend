@@ -168,6 +168,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     .build();
             broadcastToRoom(roomId, reconnectedEvent, session);
             log.info("Player {} reconnected to room {}", nickname, roomId);
+
+            // RESULT 상태면 game:result 개인화 전송
+            if (room.getStatus() == RoomRedisEntity.RoomStatus.RESULT) {
+                gamePlayService.sendGameResultToPlayer(roomId, nickname);
+            }
         } else {
             // [신규 입장] player:joined 전송 (playerCount 포함)
             WsEvent<Map<String, Object>> joinedEvent = WsEvent.<Map<String, Object>>builder()
@@ -553,11 +558,16 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             // 게임 중에 나갔는데 남은 인원이 1명일 시
             if (wasInGame) {
-                long connectedCount = room.getParticipants().stream().filter(RoomRedisEntity.Participant::getIsConnected).count();
+                long connectedCount = room.getParticipants().stream()
+                        .filter(RoomRedisEntity.Participant::getIsConnected).count();
                 if (connectedCount < 2) {
                     log.info("방 {}: 누군가 퇴장하여 인원 부족으로 게임 강제 종료", room.getRoomId());
 
+                    room.setStatus(RoomRedisEntity.RoomStatus.WAITING);
+                    room.getParticipants().forEach(p -> p.setIsReady(false));
                     room.setGameProgress(null);
+
+                    redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room);
 
                     // 남은 1명에게 에러 띄우기
                     WsEvent<ErrorPayload> errorEvent = WsEvent.<ErrorPayload>builder()
@@ -565,9 +575,17 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                             .data(new ErrorPayload("NOT_ENOUGH_PLAYERS"))
                             .build();
                     broadcastToRoom(room.getRoomId().toString(), errorEvent, session);
+                    broadcastRoomState(room.getRoomId().toString(), room);
+                    broadcastPlayersUpdated(room.getRoomId().toString(), room);
+
+                    // return 또는 아래 일반 set 이 실행되지 않게 처리
+                    session.close(CloseStatus.NORMAL);
+                    return;
                 }
             }
 
+            room.setStatus(RoomRedisEntity.RoomStatus.WAITING);
+            room.getParticipants().forEach(p -> p.setIsReady(false));
             redisTemplate.opsForValue().set(ROOM_KEY_PREFIX + room.getRoomId(), room);
 
             WsEvent<Map<String, Object>> leftEvent = WsEvent.<Map<String, Object>>builder()
