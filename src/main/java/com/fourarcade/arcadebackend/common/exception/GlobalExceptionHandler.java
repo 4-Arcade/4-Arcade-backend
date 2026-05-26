@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -36,6 +37,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleRoomException(RoomException ex) {
         ApiError error = ApiError.of(ex.getCode(), ex.getMessage(), ex.getStatus().value());
         return ResponseEntity.status(ex.getStatus()).body(ApiResponse.fail(error));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        ApiError error = ApiError.of(
+                "VALIDATION_FAILED",
+                "카테고리를 선택하지 않았거나 올바르지 않은 값입니다.",
+                400
+        );
+
+        return ResponseEntity.badRequest().body(ApiResponse.fail(error));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

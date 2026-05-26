@@ -31,12 +31,16 @@ public class ApiError {
     public static ApiError ofValidation(BindingResult bindingResult) {
         // 에러 목록을 [{"field": "email", "message": "이메일 형식이 아닙니다"}] 형태로 변환
         List<Map<String, String>> details = bindingResult.getFieldErrors().stream()
-                .map(e -> Map.of("field", e.getField(), "message", e.getDefaultMessage()))
+                .map(error -> Map.of("field", error.getField(), "message", error.getDefaultMessage()))
                 .toList();
+
+        String firstMessage = details.isEmpty()
+                ? "입력값이 올바르지 않습니다."
+                : details.get(0).get("message");
 
         return ApiError.builder()
                 .code("VALIDATION_FAILED")
-                .message("입력값이 올바르지 않습니다.")
+                .message(firstMessage)
                 .status(400)
                 .details(details)
                 .build();
