@@ -19,7 +19,7 @@ public class MypageController {
     public ResponseEntity<ApiResponse<MyQuizListResponse>> getMyQuizzes(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "7") int size,
             @RequestParam(required = false) String keyword
     ) {
         MyQuizListResponse response =
