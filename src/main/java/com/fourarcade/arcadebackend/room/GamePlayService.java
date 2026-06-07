@@ -135,6 +135,8 @@ public class GamePlayService {
         if (room == null) return;
 
         RoomRedisEntity.GameProgress progress = room.getGameProgress();
+        int currentIndex = progress.getCurrentQuestionIndex();  // 인덱스 미리 꺼내기
+        int totalQuestionCount = progress.getQuestions().size();
         RoomRedisEntity.QuestionSnapshot currentQ = progress.getQuestions().get(progress.getCurrentQuestionIndex());
 
         // 정답 여부 초기화
@@ -147,8 +149,8 @@ public class GamePlayService {
 
         // question:start (videoId 없음)
         Map<String, Object> startData = new HashMap<>();
-        startData.put("index", progress.getCurrentQuestionIndex() + 1);
-        startData.put("totalCount", progress.getQuestions().size());
+        startData.put("index", currentIndex + 1);
+        startData.put("totalCount", totalQuestionCount);
         startData.put("timeLimit", room.getSettings().getTimeLimit());
         startData.put("hint", currentQ.getHint());
 
@@ -157,15 +159,23 @@ public class GamePlayService {
                 .data(startData)
                 .build(), null);
 
-        // 직후 question:media (videoId 포함)
-        Map<String, Object> mediaData = Map.of(
-                "videoId", currentQ.getVideoId(),
-                "startSec", currentQ.getStartSec(),
-                "endSec", currentQ.getEndSec()
-        );
-        webSocketHandler.broadcastToRoom(roomId, WsEvent.builder().event("question:media").data(mediaData).build(), null);
+        // 다음 문제 비디오 ID 구하기 (마지막 문제면 null)
+        String nextVideoId = null;
+        if (currentIndex + 1 < totalQuestionCount) {
+            nextVideoId = progress.getQuestions().get(currentIndex + 1).getVideoId();
+        }
 
-        int currentIndex = progress.getCurrentQuestionIndex(); // 현재 인덱스 캡처
+        // 직후 question:media (videoId 포함)
+        Map<String, Object> mediaData = new HashMap<>();
+        mediaData.put("videoId", currentQ.getVideoId());
+        mediaData.put("startSec", currentQ.getStartSec());
+        mediaData.put("endSec", currentQ.getEndSec());
+        mediaData.put("nextVideoId", nextVideoId);
+
+        webSocketHandler.broadcastToRoom(roomId, WsEvent.builder()
+                .event("question:media")
+                .data(mediaData)
+                .build(), null);
 
         // 타임아웃 타이머 예약 (timeLimit 초 뒤에 강제 종료)
         ScheduledFuture<?> timer = taskScheduler.schedule(() -> endQuestion(roomId, currentIndex),
