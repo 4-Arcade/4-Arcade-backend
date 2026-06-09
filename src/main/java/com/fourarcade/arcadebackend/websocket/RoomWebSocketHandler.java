@@ -231,7 +231,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
                     // new Host 선정
                     if (newHost != null) {
-                        disconnectedPlayer.setIsConnected(false);
+                        disconnectedPlayer.setIsHost(false);
+
                         newHost.setIsHost(true);
                         newHost.setIsReady(false);  // 새 방장은 레디 해제
 
