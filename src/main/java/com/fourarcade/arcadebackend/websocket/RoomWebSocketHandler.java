@@ -731,7 +731,12 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             for (WebSocketSession s : sessions) {
                 // 열려있고, 제외할 세션이 아니면 전송
                 if (s.isOpen() && !s.equals(excludeSession)) {
-                    s.sendMessage(textMessage);
+                    // synchronized 로 동시 전송 막음
+                    synchronized (s) {
+                        if (s.isOpen()) {
+                            s.sendMessage(textMessage);
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
@@ -797,7 +802,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 .data(stateData)
                 .build();
 
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+        synchronized (session) {
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+        }
     }
 
     // 특정 유저에게만 메시지 전송 (Unicast)
@@ -816,7 +823,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                         .findFirst()
                         .ifPresent(s -> {
                             try {
-                                s.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+                                synchronized (s) {
+                                    if (s.isOpen()) {
+                                        s.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+                                    }
+                                }
                             } catch (Exception ex) {
                                 log.error("개별 메시지 전송 실패: {}", ex.getMessage());
                             }
