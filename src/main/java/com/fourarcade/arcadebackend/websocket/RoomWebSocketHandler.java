@@ -21,6 +21,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,7 +63,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 .build().getQueryParams().toSingleValueMap();
 
         String roomId = queryParams.get("roomId");
-        String nickname = queryParams.get("nickname");  // URL 인코딩은 String 이 자동 디코딩함
+        String rawNickname = queryParams.get("nickname");  // URL 인코딩은 String 이 자동 디코딩함
+
+        final String nickname = (rawNickname != null)
+                ? java.net.URLDecoder.decode(rawNickname, StandardCharsets.UTF_8)
+                : null;
 
         // 방 존재 여부 확인
         RoomRedisEntity room = (RoomRedisEntity) redisTemplate.opsForValue().get(ROOM_KEY_PREFIX + roomId);
