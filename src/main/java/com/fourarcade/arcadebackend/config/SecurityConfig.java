@@ -60,7 +60,7 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
-                "https://musicgame-lqvl9ib5f-dnjs55540-9645s-projects.vercel.app"
+                "https://musicgame-orpin.vercel.app"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
