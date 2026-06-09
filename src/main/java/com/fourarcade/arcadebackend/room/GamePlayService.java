@@ -254,6 +254,7 @@ public class GamePlayService {
 
         // 유저 데이터 업데이트
         playerData.setTotalScore(playerData.getTotalScore() + earnedScore);
+        progress.setQuestionSolved(true);
         playerData.setTotalSpeedBonus(playerData.getTotalSpeedBonus() + speedBonus);    // 보너스 누적
 
         // 결과 기록
@@ -269,6 +270,9 @@ public class GamePlayService {
 
         long elapsedTime = (System.currentTimeMillis() - progress.getQuestionStartedAt()) / 1000;
         int timeLeft = Math.max(0, room.getSettings().getTimeLimit() - (int) elapsedTime);
+
+        ScheduledFuture<?> timer = roomTimers.remove(roomId);
+        if (timer != null) timer.cancel(false);
 
         // question:correct 발송
         webSocketHandler.broadcastToRoom(roomId, WsEvent.builder()
@@ -436,10 +440,14 @@ public class GamePlayService {
                         WsEvent.builder().event("game:result").data(resultData).build());
             }
 
-            // game:result 전송 후 TTL 30분 재설정
-            redisTemplate.expire(ROOM_KEY_PREFIX + room.getRoomId(), 30, TimeUnit.MINUTES);
-            redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
         }
+        // game:result 전송 후 TTL 30분 재설정
+        redisTemplate.expire(ROOM_KEY_PREFIX + room.getRoomId(), 30, TimeUnit.MINUTES);
+        redisTemplate.expire(CODE_KEY_PREFIX + room.getRoomCode(), 30, TimeUnit.MINUTES);
+
+        // answerRateLimits 메모리 정리
+        String roomId = room.getRoomId().toString();
+        answerRateLimits.entrySet().removeIf(e -> e.getKey().startsWith(roomId + ":"));
     }
 
     // RESULT 상태면 game:result 개인화 전송 메서드
